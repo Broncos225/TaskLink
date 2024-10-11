@@ -9,11 +9,6 @@ app = Flask(__name__)
 app.secret_key = 'mi_secreto'  # Cambia esto a algo seguro
 bcrypt = Bcrypt(app)
 
-def get_image_data(usuario):
-    if usuario['imagen']:
-        return base64.b64encode(usuario['imagen']).decode('utf-8')
-    return None
-
 # Conexión a la base de datos
 def get_db_connection():
     conn = sqlite3.connect('TaskLink.db')
@@ -32,9 +27,18 @@ def login_requerido(f):
 @login_requerido
 def index():
     conn = get_db_connection()
-    usuario = conn.execute('SELECT * FROM usuarios WHERE usuarioId = ?', (session['user_id'],)).fetchone()
+
+    # Hacer un JOIN para obtener el nombre del estado asociado a cada tarea
+    tareas = conn.execute('''
+        SELECT T.tareaId, T.titulo, T.descripcion, T.fechaCreacion, T.valor, E.nombre_estado
+        FROM Tareas T
+        JOIN Estados E ON T.estadoId = E.estadoId
+    ''').fetchall()
+
     conn.close()
-    return render_template('index.html', usuario=usuario)
+
+    # Pasar las tareas con los nombres de los estados al template
+    return render_template('index.html', tareas=tareas)
 
 @app.route('/perfil')
 @login_requerido
@@ -42,8 +46,7 @@ def perfil():
     conn = get_db_connection()
     usuario = conn.execute('SELECT * FROM usuarios WHERE usuarioId = ?', (session['user_id'],)).fetchone()
     conn.close()
-    imagen_data = get_image_data(usuario)  # Convertir la imagen a base64
-    return render_template('perfil.html', usuario=usuario, imagen_data=imagen_data)
+    return render_template('perfil.html', usuario=usuario)
 
 @app.route('/postulaciones')
 @login_requerido
@@ -53,7 +56,20 @@ def postulaciones():
 @app.route('/solicitudes')
 @login_requerido
 def solicitudes():
-    return render_template('solicitudes.html')
+    conn = get_db_connection()
+    
+    # Obtener todas las solicitudes con el nombre del estado
+    solicitudes = conn.execute('''
+        SELECT T.tareaId, T.titulo, T.descripcion, T.fechaCreacion, E.nombre_estado
+        FROM Tareas T
+        JOIN Estados E ON T.estadoId = E.estadoId
+        WHERE T.usuarioId = ?
+    ''', (session['user_id'],)).fetchall()
+    
+    conn.close()
+
+    # Renderiza la plantilla y pasa las solicitudes
+    return render_template('solicitudes.html', solicitudes=solicitudes)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -69,18 +85,12 @@ def register():
         # Hash de la contraseña
         contrasena_hash = bcrypt.generate_password_hash(contrasena).decode('utf-8')
 
-        # Procesar la imagen
-        imagen = request.files.get('imagen')  # Cambié a get para evitar el KeyError
-        if imagen:
-            imagen_data = imagen.read()  # Leer la imagen como binario
-        else:
-            imagen_data = None  # Manejar el caso donde no se proporciona imagen
 
         # Inserta el nuevo usuario en la base de datos
         try:
             conn = get_db_connection()
-            conn.execute('INSERT INTO usuarios (nombre, apellido, correo, telefono, cedula, contrasena, ciudad, imagen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
-                         (nombre, apellido, correo, telefono, cedula, contrasena_hash, ciudad, imagen_data))
+            conn.execute('INSERT INTO usuarios (nombre, apellido, correo, telefono, cedula, contrasena, ciudad) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+                         (nombre, apellido, correo, telefono, cedula, contrasena_hash, ciudad))
             conn.commit()
             conn.close()
             flash('Registro exitoso. Puedes iniciar sesión.', 'success')

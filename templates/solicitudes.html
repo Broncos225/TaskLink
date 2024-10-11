@@ -29,6 +29,28 @@
         </div>
     </nav>
 
+    <div class="container mt-5">
+        <h1 class="mb-4">Lista de solicitudes</h1>
+        <!-- Verifica si hay tareas -->
+        {% if solicitudes %}
+        <div class="list-group">
+            {% for solicitud in solicitudes %}
+            <div class="list-group-item list-group-item-action mb-3">
+                <h5 class="mb-1">{{ solicitud['titulo'] }}</h5>
+                <p class="mb-1">{{ solicitud['descripcion'] }}</p>
+                <small class="text-muted">Fecha de creación: {{ solicitud['fechaCreacion'] }}</small><br>
+                <small class="text-muted">Estado: {{ solicitud['nombre_estado'] }}</small>
+                <!-- Aquí mostramos el nombre del estado -->
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info" role="alert">
+            No hay solicitudes disponibles.
+        </div>
+        {% endif %}
+    </div>
+
 
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>

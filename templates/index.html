@@ -30,8 +30,25 @@
     </nav>
 
     <div class="container mt-5">
-        <h1 class="text-left">Tareas</h1>
-        <p class="text-center"></p>
+        <h1 class="mb-4">Lista de Tareas</h1>
+        <!-- Verifica si hay tareas -->
+        {% if tareas %}
+        <div class="list-group">
+            {% for tarea in tareas %}
+            <div class="list-group-item list-group-item-action mb-3">
+                <h5 class="mb-1">{{ tarea['titulo'] }}</h5>
+                <p class="mb-1">{{ tarea['descripcion'] }}</p>
+                <small class="text-muted">Fecha de creación: {{ tarea['fechaCreacion'] }}</small><br>
+                <small class="text-muted">Estado: {{ tarea['nombre_estado'] }}</small>
+                <!-- Aquí mostramos el nombre del estado -->
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info" role="alert">
+            No hay tareas disponibles.
+        </div>
+        {% endif %}
     </div>
 
 
