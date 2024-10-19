@@ -1,47 +1,79 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <title>TaskLink</title>
+    <link rel="stylesheet" href="../static/css/styles.css" />
+    <link rel="icon" type="image/ico" href="../static/images/LogoSF.ico">
+    <title>Iniciar Sesión - TaskLink</title>
     <style>
-        .alert {
-            font-size: 1.1rem;
-            font-weight: bold;
-            text-align: center;
-            padding: 15px;
-        }
+
     </style>
 </head>
+
 <body>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <!-- Logo y enlace a la izquierda -->
+            <div class="d-flex align-items-center">
+                <a class="navbar-brand" href="{{ url_for('index') }}">
+                    <img src="../static/images/LogoCompleto.png" alt="TaskLink Logo" width="200px">
+                </a>
+            </div>
+
+            <!-- Imagen de perfil y nombre a la derecha -->
+            <div class="d-flex align-items-center">
+                {% if imagen_base64 %}
+                <span class="mr-3 h4">{{ usuarios['Nombre'] }} {{ usuarios['Apellido'] }}</span>
+                <div class="btn-group dropstart">
+                    <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de perfil" class="rounded-circle"
+                        style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown"
+                        aria-expanded="false">
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('profile') }}">Perfil</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar sesión</a></li>
+                    </ul>
+                </div>
+                {% else %}
+                <form class="d-flex justify-content-end">
+                    <a class="btn btn-info ml-2" href="{{ url_for('register') }}">Registrarse</a>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
     <div class="container mt-5">
         <h1 class="text-center">Iniciar Sesión</h1>
-        
+
         <!-- Mensajes Flash mejorados con Bootstrap -->
         <div class="row justify-content-center">
             <div class="col-md-6">
                 {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                {% endfor %}
+                {% endif %}
                 {% endwith %}
             </div>
         </div>
 
         <!-- Formulario de Login -->
         <form method="POST" class="mt-4">
-            <div class="form-group">
+            <div class="form-group form-pad position-relative">
+                <i class="fas fa-envelope input-icon"></i>
                 <input type="email" class="form-control" name="correo" placeholder="Correo" required>
             </div>
-            <div class="form-group">
+            <div class="form-group form-pad position-relative">
+                <i class="fas fa-lock input-icon"></i>
                 <input type="password" class="form-control" name="contrasena" placeholder="Contraseña" required>
             </div>
             <button type="submit" class="btn btn-primary btn-block">Iniciar Sesión</button>
@@ -53,5 +85,7 @@
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
 </body>
+
 </html>

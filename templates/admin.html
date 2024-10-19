@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TaskLink - Admin</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="../static/css/styles.css" />
+    <link rel="icon" type="image/ico" href="../static/images/LogoSF.ico">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <!-- Logo y enlace a la izquierda -->
+            <div class="d-flex align-items-center">
+                <a class="navbar-brand" href="{{ url_for('index') }}">
+                    <img src="../static/images/LogoCompleto.png" alt="TaskLink Logo" width="200px">
+                </a>
+                <a class="btn btn-outline-primary mr-2" href="{{ url_for('agregar_solicitud') }}">Postear una tarea</a>
+                <a class="btn btn-outline-primary mr-2" href="{{ url_for('tareas') }}">Tareas disponibles</a>
+                {% if usuarios['ID_tipo_usuario'] == 2 %}
+                <a class="btn btn-outline-primary" href="{{ url_for('admin') }}">Administrar</a>
+                {% endif %}
+            </div>
+
+            <!-- Imagen de perfil y nombre a la derecha -->
+            <div class="d-flex align-items-center">
+                {% if imagen_base64 %}
+                <span class="mr-3 h4">{{ usuarios['Nombre'] }} {{ usuarios['Apellido'] }}</span>
+                <div class="btn-group dropstart">
+                    <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de perfil" class="rounded-circle"
+                        style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown"
+                        aria-expanded="false">
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('profile') }}">Perfil</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar sesión</a></li>
+                    </ul>
+                </div>
+                {% else %}
+                <form class="d-flex justify-content-end">
+                    <a class="btn btn-primary mr-2" href="{{ url_for('login') }}">Iniciar sesión</a>
+                    <a class="btn btn-info ml-2" href="{{ url_for('register') }}">Registrarse</a>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h2 class="text-center mb-4">Lista de Usuarios</h2>
+        <div class="row">
+            {% for usuario in usuarios %}
+            <div class="col-md-4 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">{{ usuario['Nombre'] }} {{ usuario['Apellido'] }}</h5>
+                        <p class="card-text"><strong>Email:</strong> {{ usuario['Correo'] }}</p>
+                        <p class="card-text"><strong>Tipo de Usuario:</strong> {{ usuario['tipo_usuario'] }}</p>
+                        <p class="card-text"><strong>Estado del Usuario:</strong> {{ usuario['estado_usuario'] }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+
+    <!-- Integrar Bootstrap JS -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+
+</html>

@@ -1,83 +1,105 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <title>Página Principal</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TaskLink</title>
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="../static/css/styles.css" />
+  <link rel="icon" type="image/ico" href="../static/images/LogoSF.ico">
 </head>
 
 <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <a class="navbar-brand" href="{{ url_for('index') }}">TaskLink</a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav mr-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('solicitudes') }}">Mis solicitudes</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('postulaciones') }}">Mis postulaciones</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('perfil') }}">Perfil</a>
-                </li>
-            </ul>
-            <form action="{{ url_for('logout') }}" method="post" class="form-inline">
-                <button type="submit" class="btn btn-danger">Cerrar sesión</button>
-            </form>
-        </div>
-    </nav>
+  <nav class="navbar navbar-expand-lg bg-body-tertiary">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+      <!-- Logo y enlace a la izquierda -->
+      <div class="d-flex align-items-center">
+        <a class="navbar-brand" href="{{ url_for('index') }}">
+          <img src="../static/images/LogoCompleto.png" alt="TaskLink Logo" width="200px">
+        </a>
+        <a class="btn btn-outline-primary mr-2" href="{{ url_for('agregar_solicitud') }}">Postear una tarea</a>
+        <a class="btn btn-outline-primary mr-2" href="{{ url_for('tareas') }}">Tareas disponibles</a>
+        {% if usuarios['ID_tipo_usuario'] == 2 %}
+        <a class="btn btn-outline-primary" href="{{ url_for('admin') }}">Administrar</a>
+    {% endif %}
+      </div>
 
-    <div class="container mt-5">
-        <h1 class="mb-4">Lista de Tareas</h1>
-    
-        <div class="mb-4">
-            <form action="{{ url_for('index') }}" method="get">
-                <div class="form-row align-items-end">
-                    <div class="col-auto">
-                        <label for="order_by">Ordenar por:</label>
-                        <select id="order_by" name="order_by" class="form-control" onchange="this.form.submit()">
-                            <option value="Fecha_creacion" {% if order_by == 'Fecha_creacion' %}selected{% endif %}>Fecha de creación</option>
-                            <option value="Fecha_limite" {% if order_by == 'Fecha_limite' %}selected{% endif %}>Fecha límite</option>
-                            <option value="Nombre_estado" {% if order_by == 'Nombre_estado' %}selected{% endif %}>Estado</option>
-                        </select>
-                    </div>
-                    <div class="col-auto">
-                        <label for="sort_order">Orden:</label>
-                        <select id="sort_order" name="sort_order" class="form-control" onchange="this.form.submit()">
-                            <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Ascendente</option>
-                            <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Descendente</option>
-                        </select>
-                    </div>
-                </div>
-            </form>
-        </div>
-    
-        <!-- Verifica si hay tareas -->
-        {% if tareas %}
-        <div class="list-group">
-            {% for tarea in tareas %}
-            <div class="list-group-item list-group-item-action mb-3">
-                <h5 class="mb-1">{{ tarea['Descripcion'] }}</h5>
-                <p class="mb-1">{{ tarea['Descripcion'] }}</p>
-                <small class="text-muted">Fecha de creación: {{ tarea['Fecha_creacion'] }}</small><br>
-                <small class="text-muted">Fecha límite: {{ tarea['Fecha_limite'] }}</small><br>
-                <small class="text-muted">Estado: {{ tarea['Nombre_estado'] }}</small>
-            </div>
-            {% endfor %}
+      <!-- Imagen de perfil y nombre a la derecha -->
+      <div class="d-flex align-items-center">
+        {% if imagen_base64 %}
+        <span class="mr-3 h4">{{ usuarios['Nombre'] }} {{ usuarios['Apellido'] }}</span>
+        <div class="btn-group dropstart">
+          <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de perfil" class="rounded-circle"
+            style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown" aria-expanded="false">
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ url_for('profile') }}">Perfil</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar sesión</a></li>
+          </ul>
         </div>
         {% else %}
-        <div class="alert alert-info" role="alert">
-            No hay tareas disponibles.
-        </div>
+        <form class="d-flex justify-content-end">
+          <a class="btn btn-primary mr-2" href="{{ url_for('login') }}">Iniciar sesión</a>
+          <a class="btn btn-info ml-2" href="{{ url_for('register') }}">Registrarse</a>
+        </form>
         {% endif %}
+      </div>
     </div>
-    
+  </nav>
 
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <!-- Hero section -->
+  <div class="hero bg-light text-center py-5">
+    <div class="container">
+      <h1 class="display-4">
+        Encuentra ayuda para cualquier tarea, ¡rápido y fácil!
+      </h1>
+      <p class="lead">
+        TaskLink te conecta con profesionales para hacer tu vida más simple.
+      </p>
+      {% if is_logged_in %}
+      <a href="{{ url_for('agregar_solicitud') }}" class="btn btn-primary btn-lg">Postear una tarea</a>
+      {% else %}
+      <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Postea una tarea</a>
+      {% endif %}
+      <a href="{{ url_for('tareas') }}" class="btn btn-outline-secondary btn-lg">Explora las tareas disponibles</a>
+    </div>
+  </div>
+
+  <!-- Section: Why TaskLink -->
+  <div class="container my-5">
+    <h2 class="text-center">¿Por qué elegir TaskLink?</h2>
+    <div class="row text-center mt-4 d-flex align-items-stretch">
+      <div class="col-md-3 d-flex flex-column">
+        <img src="/static/images/rapidoyfacil.jpg" alt="Rápido y fácil" class="img-fluid"
+          style="width: 100%; height: auto;" />
+        <h4>Rápido y fácil</h4>
+        <p>Publica tu tarea en minutos y recibe ofertas al instante.</p>
+      </div>
+      <div class="col-md-3 d-flex flex-column">
+        <img src="/static/images/seguroyconfiable.jpg" alt="Seguro y confiable" class="img-fluid"
+          style="width: 100%; height: auto;" />
+        <h4>Seguro y confiable</h4>
+        <p>Todos nuestros taskers están verificados para tu tranquilidad.</p>
+      </div>
+      <div class="col-md-3 d-flex flex-column">
+        <img src="/static/images/opcionesflexibles.jpg" alt="Opciones flexibles" class="img-fluid"
+          style="width: 100%; height: auto;" />
+        <h4>Opciones flexibles</h4>
+        <p>Encuentra servicios desde limpieza hasta reparaciones.</p>
+      </div>
+      <div class="col-md-3 d-flex flex-column">
+        <img src="/static/images/pagoseguro.jpg" alt="Pago seguro" class="img-fluid"
+          style="width: 100%; height: auto;" />
+        <h4>Pago seguro</h4>
+        <p>Protección de pagos hasta que tu tarea esté finalizada.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Integrar Bootstrap JS -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 
 </html>

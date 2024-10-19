@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi Perfil - TaskLink</title>
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../static/css/styles.css" />
+  <link rel="icon" type="image/ico" href="../static/images/LogoSF.ico">
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg bg-body-tertiary">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+      <!-- Logo y enlace a la izquierda -->
+      <div class="d-flex align-items-center">
+        <a class="navbar-brand" href="{{ url_for('index') }}">
+          <img src="../static/images/LogoCompleto.png" alt="TaskLink Logo" width="200px">
+        </a>
+        <a class="btn btn-outline-primary mr-2" href="{{ url_for('agregar_solicitud') }}">Postear una tarea</a>
+        <a class="btn btn-outline-primary mr-2" href="{{ url_for('tareas') }}">Tareas disponibles</a>
+        {% if usuarios['ID_tipo_usuario'] == 2 %}
+        <a class="btn btn-outline-primary" href="{{ url_for('admin') }}">Administrar</a>
+        {% endif %}
+      </div>
+
+      <!-- Imagen de perfil y nombre a la derecha -->
+      <div class="d-flex align-items-center">
+        {% if imagen_base64 %}
+        <span class="mr-3 h4">{{ usuarios['Nombre'] }} {{ usuarios['Apellido'] }}</span>
+        <div class="btn-group dropstart">
+          <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de perfil" class="rounded-circle"
+            style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown" aria-expanded="false">
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ url_for('profile') }}">Perfil</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar sesión</a></li>
+          </ul>
+        </div>
+        {% else %}
+        <form class="d-flex justify-content-end">
+          <a class="btn btn-primary mr-2" href="{{ url_for('login') }}">Iniciar sesión</a>
+          <a class="btn btn-info ml-2" href="{{ url_for('register') }}">Registrarse</a>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-5">
+    <div class="d-flex justify-content-start">
+      <h2>Mi Perfil</h2>
+    </div>
+
+
+    <!-- Información del Perfil -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-3 text-center">
+
+            <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de usuario"
+              class="rounded-circle img-thumbnail mb-4" style="width: 150px; height: 150px; object-fit: cover;">
+            <br />
+            <!-- Botón para abrir el modal de cambiar foto -->
+            <button id="cambiar-foto-btn" class="btn btn-sm btn-outline-primary mt-2" data-toggle="modal"
+              data-target="#cambiarFotoModal">
+              Cambiar Foto
+            </button>
+
+            <!-- Modal para seleccionar la nueva foto de perfil -->
+            <div class="modal fade" id="cambiarFotoModal" tabindex="-1" aria-labelledby="cambiarFotoModalLabel"
+              aria-hidden="true">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="cambiarFotoModalLabel">Cambiar Foto de Perfil</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                      <span aria-hidden="true">&times;</span>
+                    </button>
+                  </div>
+                  <form id="cambiar-foto-form" action="/cambiar-foto" method="POST" enctype="multipart/form-data">
+                    <div class="modal-body">
+                      <div class="form-group">
+                        <label for="nueva_foto">Selecciona una nueva foto</label>
+                        <input type="file" name="nueva_foto" id="nueva_foto" accept="image/*" class="form-control-file"
+                          required>
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                      <button type="submit" class="btn btn-primary">Cambiar Foto</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-9">
+            <div class="d-flex justify-content-between">
+              <h3>{{ usuarios['Nombre'] }} {{ usuarios['Apellido'] }}</h3>
+              <a href="/editar_perfil" class="btn btn-secondary">Editar Perfil</a>
+            </div>
+            <p class="card-text"><strong>Correo:</strong> {{ usuarios['Correo'] }}</p>
+            <p class="card-text"><strong>Cédula:</strong> {{ usuarios['Identificacion'] }}</p>
+            <p class="card-text"><strong>Dirección:</strong> {{ usuarios['Direccion'] }}</p>
+            <p class="card-text"><strong>Ciudad:</strong> {{ usuarios['Ciudad'] }}</p>
+            <p class="card-text"><strong>Teléfono:</strong> {{ usuarios['Telefono'] }}</p>
+            <p class="card-text"><strong>Estado:</strong>
+              <span
+                class="badge {{ 'bg-success text-white custom-badge-sm' if usuarios['Estado_Usuario'] == 'Activo' else 'bg-danger text-white custom-badge-sm' }}">
+                {{ usuarios['Estado_Usuario'] }}
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección de Tareas Publicadas -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h4>Mis Tareas Publicadas</h4>
+        <div class="task-list" id="taskList">
+          {% if tareas %}
+          {% for tarea in tareas %}
+          <div class="task-item mb-4 border p-4 rounded shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h3 class="mb-0 text-truncate-2">{{ tarea['Titulo'] }}</h3>
+              {% if tarea['Estado'] == 'Finalizada' %}
+              <span class="badge badge-success custom-badge">{{ tarea['Estado'] }}</span>
+              {% elif tarea['Estado'] == 'En Proceso' %}
+              <span class="badge badge-primary custom-badge">{{ tarea['Estado'] }}</span>
+              {% elif tarea['Estado'] == 'Cancelada' %}
+              <span class="badge badge-danger custom-badge">{{ tarea['Estado'] }}</span>
+              {% else %}
+              <span class="badge badge-secondary custom-badge">{{ tarea['Estado'] }}</span>
+              {% endif %}
+
+            </div>
+
+            <div class="d-flex justify-content-between text-muted mb-3">
+              <div>
+                <i class="fa fa-calendar-alt"></i> Creada el:
+                <strong>{{ tarea['Fecha_creacion'] | format_date }}</strong>
+              </div>
+              <div>
+                <i class="fa fa-hourglass-half"></i> Límite:
+                <strong>{{ tarea['Fecha_limite'] | format_date if tarea['Fecha_limite'] else 'No especificada'
+                  }}</strong>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <h5 class="text-muted">Descripción</h5>
+              <p class="">{{ tarea['Descripcion'] }}</p>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <p class="mb-0"><i class="fa fa-dollar-sign"></i> Valor: <strong>${{ tarea['Valor'] }}</strong>
+                </p>
+                {% if tarea['Adjuntos'] %}
+                <p class="mb-0 text-blue"><i class="fa fa-paperclip mr-1"></i><a>Hay archivos adjuntos</a></p>
+                {% else %}
+                <p class="mb-0 text-muted"><i class="fa fa-paperclip mr-1"></i>No hay adjuntos.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+          {% else %}
+          <p>No hay tareas disponibles.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+
+
+
+
+
+
+
+    <!-- Bootstrap JS -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  </div>
+</body>
+
+</html>

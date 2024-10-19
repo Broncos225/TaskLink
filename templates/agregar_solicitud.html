@@ -5,45 +5,94 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../static/css/styles.css" />
+    <link rel="icon" type="image/ico" href="../static/images/LogoSF.ico">
+
     <title>Página Principal</title>
 </head>
 
 <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <a class="navbar-brand" href="{{ url_for('index') }}">TaskLink</a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav mr-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('solicitudes') }}">Mis solicitudes</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('postulaciones') }}">Mis postulaciones</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('perfil') }}">Perfil</a>
-                </li>
-            </ul>
-            <form action="{{ url_for('logout') }}" method="post" class="form-inline">
-                <button type="submit" class="btn btn-danger">Cerrar sesión</button>
-            </form>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <!-- Logo y enlace a la izquierda -->
+            <div class="d-flex align-items-center">
+                <a class="navbar-brand" href="{{ url_for('index') }}">
+                    <img src="../static/images/LogoCompleto.png" alt="TaskLink Logo" width="200px">
+                </a>
+                <a class="btn btn-outline-primary mr-2" href="{{ url_for('tareas') }}">Tareas disponibles</a>
+                {% if usuarios['ID_tipo_usuario'] == 2 %}
+                <a class="btn btn-outline-primary" href="{{ url_for('admin') }}">Administrar</a>
+                {% endif %}
+            </div>
+
+            <!-- Imagen de perfil y nombre a la derecha -->
+            <div class="d-flex align-items-center">
+                {% if imagen_base64 %}
+                <span class="mr-3 h4">{{ usuarios['Nombre'] }} {{ usuarios['Apellido'] }}</span>
+                <div class="btn-group dropstart">
+                    <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de perfil" class="rounded-circle"
+                        style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown"
+                        aria-expanded="false">
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('profile') }}">Perfil</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar sesión</a></li>
+                    </ul>
+                </div>
+                {% else %}
+                <form class="d-flex justify-content-end">
+                    <a class="btn btn-primary mr-2" href="{{ url_for('login') }}">Iniciar sesión</a>
+                    <a class="btn btn-info ml-2" href="{{ url_for('register') }}">Registrarse</a>
+                </form>
+                {% endif %}
+            </div>
         </div>
     </nav>
 
     <div class="container mt-5">
         <h1 class="text-center mb-4">Agregar Solicitud</h1>
-        <form method="POST" action="{{ url_for('agregar_solicitud') }}">
+        <form method="POST" action="{{ url_for('agregar_solicitud') }}" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="titulo">Titulo de la Tarea:</label>
+                <input type="text" class="form-control" id="titulo" name="titulo"
+                    placeholder="Ej. Pintar la sala, reparar la tubería" required />
+            </div>
             <div class="form-group">
                 <label for="descripcion">Descripción de la Tarea:</label>
                 <textarea id="descripcion" name="descripcion" class="form-control" required></textarea>
             </div>
             <div class="form-group">
+                <label for="categoria">Categoría</label>
+                {% if categorias %}
+                <select class="form-control" id="categoria" name="categoria" required>
+                    <option value="">Selecciona una categoría</option>
+                    {% for categoria in categorias %}
+                    <option value="{{ categoria['ID_categoria'] }}">{{ categoria['Nombre'] }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <option value="0">No hay categorías disponibles</option>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="valor">Presupuesto Estimado (COP)</label>
+                <input type="number" class="form-control" step="0.01" id="valor" name="valor" placeholder="Ej. 50000.25" min="0" required />
+            </div>
+
+            <div class="form-group">
                 <label for="fecha_limite">Fecha Límite</label>
                 <input type="datetime-local" class="form-control" id="fecha_limite" name="fecha_limite" required>
             </div>
-            <button type="submit" class="btn btn-primary mt-3">Agregar Solicitud</button>
+
+            <div class="form-group">
+                <label for="adjunto">Archivo Adjunto (opcional)</label>
+                <input type="file" class="form-control-file" id="adjunto" name="adjunto"
+                    accept=".jpg,.jpeg,.png,.pdf" />
+            </div>
+            <button type="submit" class="btn btn-primary mt-3 mb-5">Agregar Solicitud</button>
         </form>
     </div>
-    
+
 
 
 
