@@ -108,13 +108,16 @@
                     </span>
                 </div>
 
-                {% if tarea['Estado'] == 'Finalizada' and tarea['ID_creador'] == usuarios['ID_usuario'] %}
+                {% if tarea['Estado'] == 'Finalizada' %}
                 <div class="star-rating">
                     {% for i in range(1, 6) %}
                     <label>
+                        {% if tarea['ID_creador'] == usuarios['ID_usuario'] %}
                         <input type="radio" name="calificacion-{{ tarea['ID_tarea'] }}" value="{{ i }}" {% if
                             tarea['Calificacion']==i %}checked{% endif %}>
-                        <i class="fa fa-star {% if tarea['Calificacion'] >= i %}checked{% endif %}"
+                        {% endif %}
+                        <i class="fa fa-star {% if tarea['Calificacion'] >= i %}checked{% endif %} 
+                            {% if tarea['ID_creador'] == usuarios['ID_usuario'] %}interactive{% endif %}"
                             data-rating="{{ i }}" data-id="{{ tarea['ID_tarea'] }}"></i>
                     </label>
                     {% endfor %}

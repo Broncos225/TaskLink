@@ -61,6 +61,7 @@ def format_date(value):
 #                      ADMINISTRADOR                      #
 # ======================================================= #
 @app.route('/admin')
+@login_requerido
 def admin():
     conn = get_db_connection()
 
@@ -78,8 +79,20 @@ def admin():
         JOIN Tipos_Usuarios tu ON u.ID_tipo_usuario = tu.ID_tipo_usuario
         JOIN Estados_Usuarios eu ON u.ID_estado_usuario = eu.ID_estado_usuario
     ''').fetchall()
+    
+    usuario_actual = conn.execute('SELECT Nombre, Apellido FROM Usuarios WHERE ID_usuario = ?', (session['user_id'],)).fetchone()
+
+    # Crear una nueva lista para almacenar los usuarios con imágenes codificadas
+    usuarios_con_imagenes = []
+    for usuario in usuarios:
+        # Convertir el Row a un diccionario
+        usuario_dict = dict(usuario)
+        if usuario_dict['FotoPerfil']:
+            usuario_dict['FotoPerfil'] = base64.b64encode(usuario_dict['FotoPerfil']).decode('utf-8')
+        usuarios_con_imagenes.append(usuario_dict)
+
     conn.close()
-    return render_template('admin.html', usuarios=usuarios, imagen_base64=imagen_base64, is_logged_in=is_logged_in)
+    return render_template('admin.html', usuarios=usuarios_con_imagenes, usuario_actual=usuario_actual, imagen_base64=imagen_base64, is_logged_in=is_logged_in)
 
 # ======================================================= #
 #                      INICIO                             #
