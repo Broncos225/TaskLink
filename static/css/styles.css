@@ -132,12 +132,15 @@ body {
 }
 
 .custom-badge {
-  font-size: 1rem; /* Ajusta el tamaño según tus necesidades */
-  padding: 0.5em 1em; /* Ajusta el padding si es necesario */
+  font-size: 1rem;
+  /* Ajusta el tamaño según tus necesidades */
+  padding: 0.5em 1em;
+  /* Ajusta el padding si es necesario */
 }
 
 .custom-badge-sm {
-  font-size: 1rem; /* Ajusta el tamaño según tus necesidades */
+  font-size: 1rem;
+  /* Ajusta el tamaño según tus necesidades */
 }
 
 .message {
@@ -146,7 +149,8 @@ body {
   left: 50%;
   transform: translateX(-50%);
   padding: 10px 20px;
-  background-color: #28a745; /* Color verde para éxito */
+  background-color: #28a745;
+  /* Color verde para éxito */
   color: white;
   border-radius: 5px;
   z-index: 9999;
@@ -154,5 +158,36 @@ body {
 }
 
 .message.error {
-  background-color: #dc3545; /* Color rojo para error */
+  background-color: #dc3545;
+  /* Color rojo para error */
+}
+
+
+.star-rating {
+  display: inline-flex;
+  font-size: 1.5rem;
+}
+
+.star-rating input {
+  display: none;
+}
+
+.star-rating i {
+  color: #ddd;
+  cursor: pointer;
+}
+
+.star-rating input:checked ~ i,
+.star-rating i.checked,
+.star-rating i.hover {
+  color: #f5b301;
+}
+
+/* Nuevo estilo para estrellas ya calificadas */
+.star-rating.rated i {
+  cursor: not-allowed;
+}
+
+.star-rating .fa-star.checked {
+  pointer-events: none;
 }

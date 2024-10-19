@@ -90,24 +90,37 @@
             </div>
         </form>
 
-
-
         <div class="task-list" id="taskList">
             {% if tareas %}
             {% for tarea in tareas %}
             <div class="task-item mb-4 border p-4 rounded shadow-sm">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h3 class="mb-0 text-truncate-2">{{ tarea['Titulo'] }}</h3>
-                    {% if tarea['Estado'] == 'Finalizada' %}
-                    <span class="badge badge-success custom-badge">{{ tarea['Estado'] }}</span>
-                    {% elif tarea['Estado'] == 'En Proceso' %}
-                    <span class="badge badge-primary custom-badge">{{ tarea['Estado'] }}</span>
-                    {% elif tarea['Estado'] == 'Cancelada' %}
-                    <span class="badge badge-danger custom-badge">{{ tarea['Estado'] }}</span>
-                    {% else %}
-                    <span class="badge badge-secondary custom-badge">{{ tarea['Estado'] }}</span>
-                    {% endif %}
+
+                    <span class="badge custom-badge 
+                            {% if tarea['Estado'] == 'Finalizada' %} badge-success
+                            {% elif tarea['Estado'] == 'En Proceso' %} badge-primary
+                            {% elif tarea['Estado'] == 'Cancelada' %} badge-danger
+                            {% else %} badge-secondary
+                            {% endif %}
+                        ">
+                        {{ tarea['Estado'] }}
+                    </span>
                 </div>
+
+                {% if tarea['Estado'] == 'Finalizada' and tarea['ID_creador'] == usuarios['ID_usuario'] %}
+                <div class="star-rating">
+                    {% for i in range(1, 6) %}
+                    <label>
+                        <input type="radio" name="calificacion-{{ tarea['ID_tarea'] }}" value="{{ i }}" {% if
+                            tarea['Calificacion']==i %}checked{% endif %}>
+                        <i class="fa fa-star {% if tarea['Calificacion'] >= i %}checked{% endif %}"
+                            data-rating="{{ i }}" data-id="{{ tarea['ID_tarea'] }}"></i>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
 
                 <div class="d-flex justify-content-between text-muted mb-3">
                     <div>
@@ -131,7 +144,10 @@
                         <p class="mb-0"><i class="fa fa-dollar-sign"></i> Valor: <strong>${{ tarea['Valor'] }}</strong>
                         </p>
                         {% if tarea['Adjuntos'] %}
-                        <p class="mb-0 text-blue"><i class="fa fa-paperclip mr-1"></i><a>Hay archivos adjuntos</a></p>
+                        <p class="mb-0 text-blue">
+                            <i class="fa fa-paperclip mr-1"></i>
+                            <a>Hay archivos adjuntos</a>
+                        </p>
                         {% else %}
                         <p class="mb-0 text-muted"><i class="fa fa-paperclip mr-1"></i>No hay adjuntos.</p>
                         {% endif %}
@@ -149,6 +165,28 @@
             {% endif %}
         </div>
 
+        <!-- Modal de confirmación -->
+        <div class="modal fade" id="confirmCalificationModal" tabindex="-1" role="dialog"
+            aria-labelledby="confirmCalificationModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="confirmCalificationModalLabel">Confirmar calificación</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        ¿Estás seguro de que deseas calificar esta tarea con <span id="selectedRating"></span>
+                        estrellas?
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" id="confirmRatingBtn">Confirmar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
 
         <div class="modal fade" id="detalleModal" tabindex="-1" aria-labelledby="detalleModalLabel" aria-hidden="true">
@@ -193,7 +231,6 @@
 
     <div id="message" class="message" style="display: none;"></div>
 
-
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
@@ -237,7 +274,6 @@
                             $('#modalAdjuntos').html('<p>No hay adjuntos disponibles.</p>');
                         }
 
-                        // Controlar el botón de postularse y finalizar
                         if (data.id_creador === data.usuario_actual) {
                             $('#btnPostularse').hide();
                             $('#btnFinalizar').hide();
@@ -249,7 +285,7 @@
                                 $('#txtPostularse').text("La tarea ya la finalizaste.").show();
                             } else {
                                 $('#btnPostularse').hide();
-                                $('#btnFinalizar').show();  // Mostrar el botón de finalizar si ya está postulado
+                                $('#btnFinalizar').show();
                                 $('#txtPostularse').hide();
                             }
                         } else if (data.estado_tarea !== 1) {
@@ -258,7 +294,7 @@
                             $('#txtPostularse').text("No puedes postularte porque la tarea no está disponible.").show();
                         } else {
                             $('#btnPostularse').show();
-                            $('#btnFinalizar').hide();  // Ocultar el botón de finalizar mientras no esté postulado
+                            $('#btnFinalizar').hide();
                             $('#txtPostularse').hide();
                         }
 
@@ -309,9 +345,6 @@
                 }
             });
 
-
-
-
             $('#btnFinalizar').on('click', function () {
                 if (tareaId) {
                     $.post('/finalizar/' + tareaId, function (data) {
@@ -335,16 +368,113 @@
                     });
                 }
             });
+            // Función para verificar si una tarea ya está calificada
+            function isTaskRated(taskId) {
+                var currentRating = $('input[name="calificacion-' + taskId + '"]:checked').val();
+                return currentRating && currentRating != '0';
+            }
 
+            // Manejar el clic en una estrella
+            $('.fa-star').on('click', function (e) {
+                var taskId = $(this).data('id');
+                if (isTaskRated(taskId)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false; // Previene completamente la interacción
+                }
+                var rating = $(this).data('rating');
+                $('#selectedRating').text(rating);
+                $('#confirmCalificationModal').modal('show');
+                $('#confirmRatingBtn').data('taskId', taskId).data('rating', rating);
+            });
 
+            // Iluminar estrellas al pasar el mouse
+            $('.star-rating').on('mouseover', '.fa-star', function () {
+                var taskId = $(this).data('id');
+                if (isTaskRated(taskId)) {
+                    $(this).css('cursor', 'not-allowed'); // Cambia el cursor para indicar que no se puede interactuar
+                    return;
+                }
+                var rating = $(this).data('rating');
+                var $stars = $(this).closest('.star-rating').find('.fa-star');
+
+                $stars.each(function () {
+                    var starRating = $(this).data('rating');
+                    if (starRating <= rating) {
+                        $(this).addClass('hover');
+                    } else {
+                        $(this).removeClass('hover');
+                    }
+                });
+            });
+
+            // Restaurar el estado original al salir del mouse
+            $('.star-rating').on('mouseleave', function () {
+                var taskId = $(this).find('.fa-star:first').data('id');
+                if (isTaskRated(taskId)) {
+                    return;
+                }
+                $(this).find('.fa-star').removeClass('hover').css('cursor', '');
+            });
+
+            // Manejar la confirmación de la calificación
+            $('#confirmRatingBtn').on('click', function () {
+                var taskId = $(this).data('taskId');
+                var rating = $(this).data('rating');
+                $.ajax({
+                    url: '/calificar/' + taskId,
+                    method: 'POST',
+                    data: { calificacion: rating },
+                    success: function (response) {
+                        if (response.success) {
+                            showMessage(response.message);
+                            updateStarRating(taskId, rating);
+                            // Después de calificar, asegurarse de que las estrellas no sean clicables
+                            $('.fa-star[data-id="' + taskId + '"]').css('cursor', 'not-allowed');
+                        } else {
+                            showMessage(response.error, true);
+                        }
+                        $('#confirmCalificationModal').modal('hide');
+                    },
+                    error: function () {
+                        showMessage('Ocurrió un error al calificar la tarea.', true);
+                        $('#confirmCalificationModal').modal('hide');
+                    }
+                });
+            });
+
+            // Función para actualizar la interfaz de usuario después de calificar
+            function updateStarRating(taskId, rating) {
+                var $starRating = $('.star-rating').find('.fa-star[data-id="' + taskId + '"]').parent();
+                $starRating.find('.fa-star').removeClass('checked hover').each(function () {
+                    var starRating = $(this).data('rating');
+                    if (starRating <= rating) {
+                        $(this).addClass('checked');
+                    }
+                });
+                $('input[name="calificacion-' + taskId + '"][value="' + rating + '"]').prop('checked', true);
+            }
+
+            // Inicialización: marcar estrellas para tareas ya calificadas y deshabilitarlas
+            $('.star-rating').each(function () {
+                var taskId = $(this).find('.fa-star:first').data('id');
+                var currentRating = $('input[name="calificacion-' + taskId + '"]:checked').val();
+                if (currentRating && currentRating != '0') {
+                    $(this).find('.fa-star')
+                        .css('cursor', 'not-allowed') // Cambia el cursor para todas las estrellas de esta calificación
+                        .each(function () {
+                            var starRating = $(this).data('rating');
+                            if (starRating <= currentRating) {
+                                $(this).addClass('checked');
+                            }
+                        });
+                }
+            });
             function formatDate(dateString) {
                 const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
                 return new Date(dateString).toLocaleDateString('es-ES', options);
             }
         });
-
-
-
     </script>
 </body>
 

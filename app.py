@@ -110,6 +110,39 @@ def index():
 
     return render_template('index.html', usuarios=usuarios, imagen_base64=imagen_base64, is_logged_in=is_logged_in)
 
+# ======================================================= #
+#                      CALIFICAR TAREA                     #
+# ======================================================= #
+@app.route('/calificar/<int:tarea_id>', methods=['POST'])
+@login_requerido
+def calificar_tarea(tarea_id):
+    calificacion = request.form['calificacion']
+    usuario_actual = session['user_id']
+    conn = get_db_connection()
+
+    # Verificar si el usuario es el creador de la tarea y si ya está calificada
+    tarea = conn.execute('SELECT ID_creador, Calificacion FROM Tareas WHERE ID_tarea = ?', (tarea_id,)).fetchone()
+
+    if tarea is None:
+        conn.close()
+        return jsonify({'success': False, 'error': 'La tarea no existe.'})
+
+    if tarea['ID_creador'] != usuario_actual:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Solo el creador de la tarea puede calificarla.'})
+
+    if tarea['Calificacion'] is not None and tarea['Calificacion'] != 0:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Esta tarea ya ha sido calificada.'})
+
+    # Guardar la calificación en la base de datos
+    conn.execute('UPDATE Tareas SET Calificacion = ? WHERE ID_tarea = ?', (calificacion, tarea_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'message': 'Calificación registrada exitosamente.'})
+
+
 
 # ======================================================= #
 #                      LISTA DE TAREAS                    #
@@ -134,7 +167,8 @@ def tareas():
                U1.Nombre AS CreadorNombre, 
                U1.Apellido AS CreadorApellido, 
                U2.Nombre AS TrabajadorNombre, 
-               U2.Apellido AS TrabajadorApellido 
+               U2.Apellido AS TrabajadorApellido,
+               T.Calificacion  -- Añadir la columna de calificación
         FROM Tareas T
         JOIN Categorias C ON T.ID_categoria = C.ID_categoria
         JOIN Estados_Tareas ET ON T.ID_estado_tarea = ET.ID_estado_tarea
@@ -170,7 +204,7 @@ def tareas():
             imagen_base64 = base64.b64encode(usuario['FotoPerfil']).decode('utf-8')
     
     categorias = conn.execute('SELECT * FROM Categorias').fetchall()
-    estados = conn.execute('SELECT * FROM Estados_Tareas').fetchall()  # Obtener estados
+    estados = conn.execute('SELECT * FROM Estados_Tareas').fetchall()
 
     is_logged_in = 'user_id' in session
     conn.close()
@@ -180,6 +214,7 @@ def tareas():
                            usuarios=usuarios, is_logged_in=is_logged_in, 
                            categoria_filtro=categoria_filtro, estado_filtro=estado_filtro, 
                            orden=orden)
+
 
 
 # ======================================================= #
