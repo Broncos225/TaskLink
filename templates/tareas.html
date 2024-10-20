@@ -132,7 +132,8 @@
                     </div>
                     <div>
                         <i class="fa fa-hourglass-half"></i> Límite:
-                        <strong>{{ tarea['Fecha_limite'] | format_date if tarea['Fecha_limite'] else 'No especificada'
+                        <strong>{{ tarea['Fecha_limite'] | sumar_cinco_horas if tarea['Fecha_limite'] else 'No
+                            especificada'
                             }}</strong>
                     </div>
                 </div>
@@ -263,7 +264,7 @@
                         alert(data.error);
                     } else {
                         const fechaCreacionFormateada = formatDate(data.fecha_creacion);
-                        const fechaLimiteFormateada = formatDate(data.fecha_limite);
+                        const fechaLimiteFormateada = sumar_cinco_horas(data.fecha_limite);
 
                         $('#modalTitulo').text(data.titulo);
                         $('#modalDescripcion').text(data.descripcion);
@@ -473,10 +474,61 @@
                         });
                 }
             });
-            function formatDate(dateString) {
-                const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
-                return new Date(dateString).toLocaleDateString('es-ES', options);
+            function formatDate(value) {
+                const meses = {
+                    '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+                    '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+                    '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
+                };
+
+                if (value) {
+                    let utcTime;
+                    try {
+                        utcTime = new Date(value.replace(' ', 'T'));
+                        if (isNaN(utcTime)) throw new Error();
+                    } catch (e) {
+                        return value; 
+                    }
+
+                    let localTime = new Date(utcTime.getTime() - 5 * 60 * 60 * 1000);
+
+                    let dia = localTime.getDate().toString().padStart(2, '0');
+                    let mes = meses[(localTime.getMonth() + 1).toString().padStart(2, '0')];
+                    let año = localTime.getFullYear();
+                    let hora = localTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+                    return `${dia} de ${mes} del ${año} ${hora}`;
+                }
+                return value;
             }
+            function sumar_cinco_horas(value) {
+                const meses = {
+                    '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+                    '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+                    '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
+                };
+
+                if (value) {
+                    let utcTime;
+                    try {
+                        utcTime = new Date(value.replace(' ', 'T'));
+                        if (isNaN(utcTime)) throw new Error();
+                    } catch (e) {
+                        return value; 
+                    }
+
+                    let localTime = new Date(utcTime.getTime());
+
+                    let dia = localTime.getDate().toString().padStart(2, '0');
+                    let mes = meses[(localTime.getMonth() + 1).toString().padStart(2, '0')];
+                    let año = localTime.getFullYear();
+                    let hora = localTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+                    return `${dia} de ${mes} del ${año} ${hora}`;
+                }
+                return value;
+            }
+
         });
     </script>
 </body>

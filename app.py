@@ -1,8 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, make_response
 import sqlite3
 from flask_bcrypt import Bcrypt
 from functools import wraps
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
 import os
+import io
 import base64
 from datetime import datetime, timedelta
 
@@ -56,6 +62,35 @@ def format_date(value):
         return f"{dia} de {mes} del {año} {hora}"
     return value
 
+# ======================================================= #
+#                       SUMAR 5 HORAS                     #
+# ======================================================= #
+@app.template_filter('sumar_cinco_horas')
+def sumar_cinco_horas(value):
+    meses = {
+        '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+        '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+        '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
+    }
+    
+    if value:
+        try:
+            utc_time = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            try:
+                utc_time = datetime.strptime(value, '%Y-%m-%dT%H:%M')
+            except ValueError:
+                return value 
+
+        local_time = utc_time
+        
+        dia = local_time.strftime('%d')
+        mes = meses[local_time.strftime('%m')]
+        año = local_time.strftime('%Y')
+        hora = local_time.strftime('%I:%M %p')
+
+        return f"{dia} de {mes} del {año} {hora}"
+    return value
 
 # ======================================================= #
 #                      ADMINISTRADOR                      #
@@ -93,6 +128,89 @@ def admin():
 
     conn.close()
     return render_template('admin.html', usuarios=usuarios_con_imagenes, usuario_actual=usuario_actual, imagen_base64=imagen_base64, is_logged_in=is_logged_in)
+
+# ======================================================= #
+#                     GENERAR REPORTE                     #
+# ======================================================= #
+@app.route('/generar_reporte')
+@login_requerido
+def generar_reporte():
+    conn = get_db_connection()
+    
+    # Consulta SQL que une las tablas Usuarios, Estados_Usuarios, Tipos_Usuarios y Ciudades
+    usuarios = conn.execute('''
+        SELECT u.ID_usuario, u.Nombre, u.Apellido, u.Correo, tu.Nombre AS tipo_usuario,
+               eu.Nombre AS estado_usuario, c.Nombre AS ciudad, u.Fecha_creacion
+        FROM Usuarios u
+        JOIN Estados_Usuarios eu ON u.ID_estado_usuario = eu.ID_estado_usuario
+        JOIN Tipos_Usuarios tu ON u.ID_tipo_usuario = tu.ID_tipo_usuario
+        JOIN Ciudades c ON u.ID_ciudad = c.ID_ciudad
+    ''').fetchall()
+
+    # Crear un buffer para el PDF
+    buffer = io.BytesIO()
+    pdf = SimpleDocTemplate(buffer, pagesize=letter)
+    
+    # Crear una lista para almacenar los elementos del PDF
+    elements = []
+
+    # Título del reporte
+    styles = getSampleStyleSheet()
+    title = Paragraph("Reporte de Usuarios", styles['Title'])
+    elements.append(title)
+
+    # Espacio después del título
+    elements.append(Paragraph("<br/>", styles['Normal']))
+
+    # Encabezados de la tabla
+    headers = ["ID", "Nombre", "Apellido", "Correo", "Tipo de Usuario", "Estado", "Ciudad", "Fecha de Creación"]
+
+    # Datos de los usuarios
+    data = []
+    data.append(headers)  # Agregar encabezados
+    for usuario in usuarios:
+        row = [
+            usuario['ID_usuario'],
+            usuario['Nombre'],
+            usuario['Apellido'],
+            usuario['Correo'],
+            usuario['tipo_usuario'],
+            usuario['estado_usuario'],
+            usuario['ciudad'],
+            usuario['Fecha_creacion']  # Incluyendo la fecha de creación
+        ]
+        data.append(row)
+
+    # Crear la tabla
+    table = Table(data)
+
+    # Estilo de la tabla
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#007bff')),  # Color de fondo azul para el encabezado
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),  # Color del texto del encabezado
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#add8e6')),  # Color de fondo azul claro para las filas
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),  # Líneas de la cuadrícula
+        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),  # Color del texto de las filas
+    ])
+    
+    table.setStyle(style)
+
+    # Agregar la tabla a los elementos
+    elements.append(table)
+
+    # Generar el PDF
+    pdf.build(elements)
+
+    # Regresar al cliente como un archivo PDF
+    buffer.seek(0)
+    response = make_response(buffer.read())
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'attachment; filename=Reporte de usuarios.pdf'
+    
+    return response
 
 # ======================================================= #
 #                      INICIO                             #
@@ -386,7 +504,7 @@ def agregar_solicitud():
         conn.commit()
         conn.close()
         
-        return redirect(url_for('index'))
+        return redirect(url_for('tareas'))
     
     return render_template('agregar_solicitud.html', usuarios=usuarios, categorias=categorias, imagen_base64=imagen_base64, is_logged_in=is_logged_in)
 
