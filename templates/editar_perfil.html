@@ -11,66 +11,99 @@
 </head>
 
 <body>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <a class="navbar-brand" href="{{ url_for('index') }}">
+                    <img src="../static/images/LogoCompleto.png" alt="TaskLink Logo" width="200px">
+                </a>
+                <a class="btn btn-outline-primary mr-2" href="{{ url_for('agregar_solicitud') }}">Postear una tarea</a>
+                <a class="btn btn-outline-primary mr-2" href="{{ url_for('tareas') }}">Tareas disponibles</a>
+            </div>
+        </div>
+    </nav>
     <div class="container mt-5">
         <h2 class="text-center">Editar Perfil</h2>
         <form id="editProfileForm" action="/actualizar-perfil" method="POST" enctype="multipart/form-data" class="mt-4">
 
-            <div class="form-group">
-                <label for="nombre">Nombre</label>
-                <input type="text" class="form-control" id="nombre" name="nombre" value="{{ usuario['Nombre'] }}"
-                    required />
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="nombre">Nombre</label>
+                        <input type="text" class="form-control" id="nombre" name="nombre"
+                            value="{{ usuario['Nombre'] }}" required />
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="apellido">Apellido</label>
+                        <input type="text" class="form-control" id="apellido" name="apellido"
+                            value="{{ usuario['Apellido'] }}" required />
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="apellido">Apellido</label>
-                <input type="text" class="form-control" id="apellido" name="apellido" value="{{ usuario['Apellido'] }}"
-                    required />
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="identificacion">Número de identificación</label>
+                        <input type="text" class="form-control" id="identificacion" name="identificacion"
+                            value="{{ usuario['Identificacion'] }}" required />
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="correo">Correo electrónico</label>
+                        <input type="email" class="form-control" id="correo" name="correo"
+                            value="{{ usuario['Correo'] }}" required />
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="identificacion">Número de identificación</label>
-                <input type="text" class="form-control" id="identificacion" name="identificacion"
-                    value="{{ usuario['Identificacion'] }}" required />
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="direccion">Dirección</label>
+                        <input type="text" class="form-control" id="direccion" name="direccion"
+                            value="{{ usuario['Direccion'] }}" />
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="ciudad">Ciudad</label>
+                        {% if ciudades %}
+                        <select class="form-control" id="ciudad" name="ciudad" required>
+                            {% for ciudad in ciudades %}
+                            <option value="{{ ciudad['ID_ciudad'] }}" {% if ciudad['Nombre']==usuario['Ciudad'] %}
+                                selected {% endif %}>
+                                {{ ciudad['Nombre'] }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% else %}
+                        <select class="form-control" id="ciudad" disabled>
+                            <option>No hay ciudades disponibles</option>
+                        </select>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="correo">Correo electrónico</label>
-                <input type="email" class="form-control" id="correo" name="correo" value="{{ usuario['Correo'] }}"
-                    required />
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="telefono">Teléfono</label>
+                        <input type="text" class="form-control" id="telefono" name="telefono"
+                            value="{{ usuario['Telefono'] }}" />
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="direccion">Dirección</label>
-                <input type="text" class="form-control" id="direccion" name="direccion"
-                    value="{{ usuario['Direccion'] }}" />
-            </div>
-
-            <div class="form-group">
-                <label for="ciudad">Ciudad</label>
-                {% if ciudades %}
-                <select class="form-control" id="ciudad" name="ciudad" required>
-                    {% for ciudad in ciudades %}
-                    <option value="{{ ciudad['ID_ciudad'] }}" {% if ciudad['Nombre']==usuario['Ciudad'] %} selected {%
-                        endif %}>
-                        {{ ciudad['Nombre'] }}
-                    </option>
-                    {% endfor %}
-                </select>
-                {% else %}
-                <select class="form-control" id="ciudad" disabled>
-                    <option>No hay ciudades disponibles</option>
-                </select>
-                {% endif %}
-            </div>
-
-            <div class="form-group">
-                <label for="telefono">Teléfono</label>
-                <input type="text" class="form-control" id="telefono" name="telefono"
-                    value="{{ usuario['Telefono'] }}" />
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-block mt-3">Guardar Cambios</button>
-            <a href="/profile" class="btn btn-secondary btn-block mt-2">Cancelar</a>
+            <button type="submit" class="btn btn-outline-primary btn-block mt-3">Guardar Cambios</button>
+            <a href="/profile" class="btn btn-outline-secondary btn-block mt-2">Cancelar</a>
         </form>
     </div>
 

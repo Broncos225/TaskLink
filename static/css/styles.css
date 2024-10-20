@@ -144,22 +144,36 @@ body {
 }
 
 .message {
+  display: none;
   position: fixed;
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 1000;
   padding: 10px 20px;
-  background-color: #28a745;
-  /* Color verde para éxito */
-  color: white;
   border-radius: 5px;
-  z-index: 9999;
-  transition: opacity 0.5s ease, top 0.5s ease;
+  animation: slideDown 0.5s ease-out;
 }
 
 .message.error {
-  background-color: #dc3545;
-  /* Color rojo para error */
+  background-color: #ff4444;
+  color: white;
+}
+
+.message.success {
+  background-color: #44aa44;
+  color: white;
+}
+
+@keyframes slideDown {
+  from {
+      top: -100px;
+      opacity: 0;
+  }
+  to {
+      top: 20px;
+      opacity: 1;
+  }
 }
 
 

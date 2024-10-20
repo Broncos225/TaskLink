@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Registrarse - TaskLink</title>
+    <title>TaskLink - Registrarse</title>
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
     <link rel="icon" type="image/ico" href="../static/images/LogoSF.ico">
     <link rel="stylesheet" href="/static/css/styles.css" />
@@ -32,7 +32,8 @@
                 <span class="mr-3 h4">{{ usuarios['Nombre'] }} {{ usuarios['Apellido'] }}</span>
                 <div class="btn-group dropstart">
                     <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de perfil" class="rounded-circle"
-                        style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown" aria-expanded="false">
+                        style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown"
+                        aria-expanded="false">
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{{ url_for('profile') }}">Perfil</a></li>
                         <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar sesión</a></li>
@@ -50,112 +51,167 @@
     <div class="container mt-5">
         <h2 class="text-center">Crear una cuenta en TaskLink</h2>
         <form id="registerForm" action="/register" method="POST" enctype="multipart/form-data" class="mt-4">
-            <div class="form-group position-relative">
-                <label for="name">Nombre</label>
-                <i class="fa fa-user input-icon-register"></i>
-                <input type="text" class="form-control" id="name" name="name" placeholder="Ingresa tu nombre" required />
+            <div class="row">
+                <div class="form-group col-md-6 position-relative">
+                    <label for="name">Nombre</label>
+                    <i class="fa fa-user input-icon-register"></i>
+                    <input type="text" class="form-control" id="name" name="name" placeholder="Ingresa tu nombre"
+                        required />
+                </div>
+                <div class="form-group col-md-6 position-relative">
+                    <label for="apellido">Apellido</label>
+                    <i class="fa fa-user input-icon-register"></i>
+                    <input type="text" class="form-control" id="apellido" name="apellido"
+                        placeholder="Ingresa tu apellido" required />
+                </div>
             </div>
 
-            <div class="form-group position-relative">
-                <label for="apellido">Apellido</label>
-                <i class="fa fa-user input-icon-register"></i>
-                <input type="text" class="form-control" id="apellido" name="apellido" placeholder="Ingresa tu apellido" required />
+            <div class="row">
+                <div class="form-group col-md-6 position-relative">
+                    <label for="id_file">Archivo de identificación</label>
+                    <i class="fas fa-file-alt input-icon-register"></i>
+                    <input type="file" class="form-control-file" id="id_file" name="id_file"
+                        accept=".jpg,.jpeg,.png,.pdf" required />
+                </div>
+                <div class="form-group col-md-6 position-relative">
+                    <label for="identification">Número de identificación</label>
+                    <i class="fa fa-id-card input-icon-register"></i>
+                    <input type="text" class="form-control" id="identification" name="identification"
+                        placeholder="Ingresa tu número de identificación" required />
+                </div>
             </div>
 
-            <div class="form-group position-relative">
-                <label for="identification">Número de identificación</label>
-                <i class="fa fa-id-card input-icon-register"></i>
-                <input type="text" class="form-control" id="identification" name="identification"
-                    placeholder="Ingresa tu número de identificación" required />
+            <div class="row">
+                <div class="form-group col-md-6 position-relative">
+                    <label for="profile_file">Foto de Perfil</label>
+                    <i class="fas fa-image input-icon-register"></i>
+                    <input type="file" class="form-control-file" id="profile_file" name="profile_file"
+                        accept=".jpg,.jpeg,.png,.pdf" required />
+                </div>
+                <div class="form-group col-md-6 position-relative">
+                    <label for="email">Correo electrónico</label>
+                    <i class="fas fa-envelope input-icon-register"></i>
+                    <input type="email" class="form-control" id="email" name="email"
+                        placeholder="Ingresa tu correo electrónico" required />
+                </div>
             </div>
 
-            <div class="form-group position-relative">
-                <label for="id_file">Archivo de identificación</label>
-                <i class="fas fa-file-alt input-icon-register"></i>
-                <input type="file" class="form-control-file" id="id_file" name="id_file" accept=".jpg,.jpeg,.png,.pdf" required />
+            <div class="row">
+                <div class="form-group col-md-6 position-relative">
+                    <label for="address">Dirección</label>
+                    <i class="fas fa-map-marker-alt input-icon-register"></i>
+                    <input type="text" class="form-control" id="address" name="address"
+                        placeholder="Ingresa tu dirección" required />
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="city">Ciudad</label>
+                    <i class="fas fa-globe input-icon-register"></i>
+                    {% if ciudades %}
+                    <select class="form-control" id="city" name="city" required>
+                        {% for ciudad in ciudades %}
+                        <option value="{{ ciudad['ID_ciudad'] }}">{{ ciudad['Nombre'] }}</option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
+                    <option value="0">No hay ciudades disponibles</option>
+                    {% endif %}
+                </div>
             </div>
 
-            <div class="form-group position-relative">
-                <label for="profile_file">Foto de Perfil</label>
-                <i class="fas fa-image input-icon-register"></i>
-                <input type="file" class="form-control-file" id="profile_file" name="profile_file" accept=".jpg,.jpeg,.png,.pdf" required />
+            <div class="row">
+                <div class="form-group col-md-6 position-relative">
+                    <label for="password">Contraseña</label>
+                    <i class="fas fa-lock input-icon-register"></i>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                </div>
+                <div class="form-group col-md-6 position-relative">
+                    <label for="phone">Teléfono</label>
+                    <i class="fas fa-phone input-icon-register"></i>
+                    <input type="text" class="form-control" id="phone" name="phone"
+                        placeholder="Ingresa tu número de teléfono" required />
+                </div>
             </div>
 
-            <div class="form-group position-relative">
-                <label for="email">Correo electrónico</label>
-                <i class="fas fa-envelope input-icon-register"></i>
-                <input type="email" class="form-control" id="email" name="email" placeholder="Ingresa tu correo electrónico" required />
+            <div class="row">
+                <div class="form-group col-md-6 position-relative">
+                    <label for="confirm_password">Confirmar Contraseña</label>
+                    <i class="fas fa-lock input-icon-register"></i>
+                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                </div>
             </div>
 
-            <div class="form-group position-relative">
-                <label for="address">Dirección</label>
-                <i class="fas fa-map-marker-alt input-icon-register"></i>
-                <input type="text" class="form-control" id="address" name="address" placeholder="Ingresa tu dirección" required />
-            </div>
-
-            <div class="form-group">
-                <label for="city">Ciudad</label>
-                {% if ciudades %}
-                <select class="form-control" id="city" name="city" required>
-                    {% for ciudad in ciudades %}
-                    <option value="{{ ciudad['ID_ciudad'] }}">{{ ciudad['Nombre'] }}</option>
-                    {% endfor %}
-                </select>
-                {% else %}
-                <option value="0">No hay ciudades disponibles</option>
-                {% endif %}
-            </div>
-
-            <div class="form-group position-relative">
-                <label for="phone">Teléfono</label>
-                <i class="fas fa-phone input-icon-register"></i>
-                <input type="text" class="form-control" id="phone" name="phone" placeholder="Ingresa tu número de teléfono" required />
-            </div>
-
-            <!-- Contraseña -->
-            <div class="mb-3 position-relative">
-                <label for="password" class="form-label">Contraseña</label>
-                <i class="fas fa-lock input-icon-register"></i>
-                <input type="password" class="form-control" id="password" name="password" required>
-            </div>
-
-            <!-- Confirmar Contraseña -->
-            <div class="mb-3 position-relative">
-                <label for="confirm_password" class="form-label">Confirmar Contraseña</label>
-                <i class="fas fa-lock input-icon-register"></i>
-                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
-            </div>
-
-            <!-- Mensaje de error -->
             <div id="error-message" class="alert alert-danger" style="display: none;">
                 Las contraseñas no coinciden.
             </div>
 
-            <button type="submit" class="btn btn-primary btn-block mt-3 mb-5">
-                Registrarse
-            </button>
+            <button type="submit" class="btn btn-primary btn-block mt-3 mb-5">Registrarse</button>
         </form>
     </div>
+
+    <div id="message" class="message" style="display: none;"></div>
+
 
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script>
         document.getElementById('registerForm').addEventListener('submit', function (event) {
-            event.preventDefault();  // Evita la recarga de la página
+            event.preventDefault();
 
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirm_password').value;
 
             if (password !== confirmPassword) {
-                document.getElementById('error-message').style.display = 'block';  // Mostrar mensaje de error
-                document.getElementById('password').value = '';  // Limpiar campo de contraseña
-                document.getElementById('confirm_password').value = '';  // Limpiar campo de confirmación
-            } else {
-                document.getElementById('error-message').style.display = 'none';  // Ocultar mensaje de error si no existe
-                this.submit();  // Si las contraseñas coinciden, envía el formulario
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('password').value = '';
+                document.getElementById('confirm_password').value = '';
+                return;
             }
+
+            // Crear FormData con los datos del formulario
+            const formData = new FormData(this);
+
+            // Enviar la solicitud usando fetch
+            fetch('/register', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, true);
+                    } else if (data.success) {
+                        showMessage(data.success, false);
+                        setTimeout(() => {
+                            window.location.href = '/login';
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    showMessage('Error al procesar la solicitud', true);
+                });
         });
+
+        function showMessage(message, isError = false) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.className = 'message ' + (isError ? 'error' : 'success');
+            messageDiv.style.display = 'block';
+            messageDiv.style.position = 'fixed';
+            messageDiv.style.top = '20px';
+            messageDiv.style.left = '50%';
+            messageDiv.style.transform = 'translateX(-50%)';
+            messageDiv.style.zIndex = '1000';
+            messageDiv.style.padding = '10px 20px';
+            messageDiv.style.borderRadius = '5px';
+            messageDiv.style.backgroundColor = isError ? '#ff4444' : '#44aa44';
+            messageDiv.style.color = 'white';
+
+            setTimeout(function () {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+
     </script>
 </body>
 

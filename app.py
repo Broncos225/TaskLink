@@ -652,29 +652,41 @@ def register():
 
         # Asegúrate de que los archivos no estén vacíos
         if not id_file or not profile_file:
-            print("Se debe subir ambos archivos.")
-            return redirect(url_for('register'))
+            return jsonify({'error': 'Se debe subir ambos archivos.'}), 400
 
         # Leer el contenido de los archivos
         id_file_data = id_file.read()
         profile_file_data = profile_file.read()
 
         conn = get_db_connection()
-        print(ciudad)
         try:
+            # Verificar si la cédula ya existe
+            existing_user = conn.execute('SELECT Identificacion FROM Usuarios WHERE Identificacion = ?', 
+                                      (identificacion,)).fetchone()
+            if existing_user:
+                return jsonify({'error': 'La cédula ingresada ya está registrada en el sistema'}), 409
+
             conn.execute('''
-                INSERT INTO Usuarios (Nombre, Apellido, Correo, Identificacion, Direccion, Telefono, ID_ciudad, ID_tipo_usuario, ID_estado_usuario, Contrasena, FotoPerfil, FotoCedula)
+                INSERT INTO Usuarios (Nombre, Apellido, Correo, Identificacion, Direccion, Telefono, 
+                                    ID_ciudad, ID_tipo_usuario, ID_estado_usuario, Contrasena, 
+                                    FotoPerfil, FotoCedula)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (nombre, apellido, email, identificacion, direccion, telefono, ciudad, 1, 1, hashed_password, profile_file_data, id_file_data))
+            ''', (nombre, apellido, email, identificacion, direccion, telefono, ciudad, 
+                 1, 1, hashed_password, profile_file_data, id_file_data))
             conn.commit()
+            return jsonify({'success': 'Usuario registrado exitosamente'}), 200
+        except sqlite3.IntegrityError as e:
+            conn.rollback()
+            if "Identificacion" in str(e):
+                return jsonify({'error': 'La cédula ingresada ya está registrada en el sistema'}), 409
+            elif "Correo" in str(e):
+                return jsonify({'error': 'El correo electrónico ya está registrado'}), 409
+            return jsonify({'error': 'Error al registrar el usuario'}), 400
         except Exception as e:
             conn.rollback()
-            print(f'Error al registrar el usuario: {str(e)}')
-            return redirect(url_for('register'))  
+            return jsonify({'error': 'Error al registrar el usuario'}), 400
         finally:
             conn.close()
-
-        return redirect(url_for('login'))
 
     return render_template('register.html', ciudades=ciudades)
 
