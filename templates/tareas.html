@@ -30,7 +30,7 @@
                 <span class="mr-3 h4">{{ usuarios['Nombre'] }} {{ usuarios['Apellido'] }}</span>
                 <div class="btn-group dropstart">
                     <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de perfil" class="rounded-circle"
-                        style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown"
+                        style="width: 50px; height: 50px; cursor: pointer; object-fit: cover;" data-toggle="dropdown"
                         aria-expanded="false">
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{{ url_for('profile') }}">Perfil</a></li>
@@ -48,7 +48,12 @@
     </nav>
 
     <div class="container mt-4">
-        <h2>Todas las Tareas</h2>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Todas las Tareas</h2>
+            <a href="{{ url_for('reporte_tareas') }}" class="btn btn-primary">
+                <i class="fa fa-file mr-1"></i> Reporte de tareas publicadas
+            </a>
+        </div>
 
         <form method="GET" class="mb-3">
             <div class="form-row align-items-end">
@@ -98,12 +103,11 @@
                     <h3 class="mb-0 text-truncate-2">{{ tarea['Titulo'] }}</h3>
 
                     <span class="badge custom-badge 
-                            {% if tarea['Estado'] == 'Finalizada' %} badge-success
-                            {% elif tarea['Estado'] == 'En Proceso' %} badge-primary
-                            {% elif tarea['Estado'] == 'Cancelada' %} badge-danger
-                            {% else %} badge-secondary
-                            {% endif %}
-                        ">
+                        {% if tarea['Estado'] == 'Finalizada' %} badge-success
+                        {% elif tarea['Estado'] == 'En Proceso' %} badge-primary
+                        {% elif tarea['Estado'] == 'Cancelada' %} badge-danger
+                        {% else %} badge-secondary
+                        {% endif %}">
                         {{ tarea['Estado'] }}
                     </span>
                 </div>
@@ -117,13 +121,12 @@
                             tarea['Calificacion']==i %}checked{% endif %}>
                         {% endif %}
                         <i class="fa fa-star {% if tarea['Calificacion'] >= i %}checked{% endif %} 
-                            {% if tarea['ID_creador'] == usuarios['ID_usuario'] %}interactive{% endif %}"
+                        {% if tarea['ID_creador'] == usuarios['ID_usuario'] %}interactive{% endif %}"
                             data-rating="{{ i }}" data-id="{{ tarea['ID_tarea'] }}"></i>
                     </label>
                     {% endfor %}
                 </div>
                 {% endif %}
-
 
                 <div class="d-flex justify-content-between text-muted mb-3">
                     <div>
@@ -133,8 +136,7 @@
                     <div>
                         <i class="fa fa-hourglass-half"></i> Límite:
                         <strong>{{ tarea['Fecha_limite'] | sumar_cinco_horas if tarea['Fecha_limite'] else 'No
-                            especificada'
-                            }}</strong>
+                            especificada' }}</strong>
                     </div>
                 </div>
 
@@ -168,69 +170,70 @@
             <p>No hay tareas disponibles.</p>
             {% endif %}
         </div>
+    </div>
 
-        <!-- Modal de confirmación -->
-        <div class="modal fade" id="confirmCalificationModal" tabindex="-1" role="dialog"
-            aria-labelledby="confirmCalificationModalLabel" aria-hidden="true">
-            <div class="modal-dialog" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="confirmCalificationModalLabel">Confirmar calificación</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
+
+    <!-- Modal de confirmación -->
+    <div class="modal fade" id="confirmCalificationModal" tabindex="-1" role="dialog"
+        aria-labelledby="confirmCalificationModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmCalificationModalLabel">Confirmar calificación</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    ¿Estás seguro de que deseas calificar esta tarea con <span id="selectedRating"></span>
+                    estrellas?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="confirmRatingBtn">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="modal fade" id="detalleModal" tabindex="-1" aria-labelledby="detalleModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="detalleModalLabel">Detalles de la Tarea</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <h3 id="modalTitulo" class="text-dark"></h3>
+                    <p id="modalDescripcion"></p>
+                    <p><i class="fa fa-calendar-alt"></i> <strong>Fecha de creación:</strong> <span
+                            id="modalFechaCreacion"></span></p>
+                    <p><i class="fa fa-hourglass-half"></i> <strong>Fecha límite:</strong> <span
+                            id="modalFechaLimite"></span></p>
+                    <p><i class="fa fa-dollar-sign"></i> <strong>Valor:</strong> <span id="modalValor"></span></p>
+
+                    <div id="modalAdjuntos" class="mt-3">
+                        <h5>Archivos adjuntos:</h5>
+                        <div id="adjuntosContainer"></div>
                     </div>
-                    <div class="modal-body">
-                        ¿Estás seguro de que deseas calificar esta tarea con <span id="selectedRating"></span>
-                        estrellas?
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-primary" id="confirmRatingBtn">Confirmar</button>
+
+                    <div class="d-grid gap-2">
+                        <button id="btnPostularse" type="button" class="btn btn-success w-100 mt-5">Postularse</button>
+                        <p id="txtPostularse" class="alert alert-primary mt-5">No te puedes postular porque eres el
+                            creador de la tarea.</p>
+                        <button id="btnFinalizar" type="button" class="btn btn-primary w-100 mt-5"
+                            style="display: none;">Finalizar tarea</button>
+
                     </div>
                 </div>
             </div>
         </div>
+    </div>
 
-
-        <div class="modal fade" id="detalleModal" tabindex="-1" aria-labelledby="detalleModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-xl">
-                <div class="modal-content">
-                    <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title" id="detalleModalLabel">Detalles de la Tarea</h5>
-                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <h3 id="modalTitulo" class="text-dark"></h3>
-                        <p id="modalDescripcion"></p>
-                        <p><i class="fa fa-calendar-alt"></i> <strong>Fecha de creación:</strong> <span
-                                id="modalFechaCreacion"></span></p>
-                        <p><i class="fa fa-hourglass-half"></i> <strong>Fecha límite:</strong> <span
-                                id="modalFechaLimite"></span></p>
-                        <p><i class="fa fa-dollar-sign"></i> <strong>Valor:</strong> <span id="modalValor"></span></p>
-
-                        <div id="modalAdjuntos" class="mt-3">
-                            <h5>Archivos adjuntos:</h5>
-                            <div id="adjuntosContainer"></div>
-                        </div>
-
-                        <div class="d-grid gap-2">
-                            <button id="btnPostularse" type="button"
-                                class="btn btn-success w-100 mt-5">Postularse</button>
-                            <p id="txtPostularse" class="alert alert-primary mt-5">No te puedes postular porque eres el
-                                creador de la tarea.</p>
-                            <button id="btnFinalizar" type="button" class="btn btn-primary w-100 mt-5"
-                                style="display: none;">Finalizar tarea</button>
-
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     </div>
 
     <div id="message" class="message" style="display: none;"></div>
@@ -308,16 +311,22 @@
             });
 
             function showMessage(message, isError = false) {
-                const messageDiv = $('#message');
-                messageDiv.text(message);
-                messageDiv.toggleClass('error', isError);
-                messageDiv.show();
+                const messageDiv = document.getElementById('message');
+                messageDiv.textContent = message;
+                messageDiv.className = 'message ' + (isError ? 'error' : 'success');
+                messageDiv.style.display = 'block';
+                messageDiv.style.position = 'fixed';
+                messageDiv.style.top = '20px';
+                messageDiv.style.left = '50%';
+                messageDiv.style.transform = 'translateX(-50%)';
+                messageDiv.style.zIndex = '1000';
+                messageDiv.style.padding = '10px 20px';
+                messageDiv.style.borderRadius = '5px';
+                messageDiv.style.backgroundColor = isError ? '#ff4444' : '#44aa44';
+                messageDiv.style.color = 'white';
 
-                // Desvanecer el mensaje después de 3 segundos
                 setTimeout(function () {
-                    messageDiv.fadeOut(500, function () {
-                        $(this).css('top', '20px'); // Restablecer la posición después de ocultar
-                    });
+                    messageDiv.style.display = 'none';
                 }, 3000);
             }
 
@@ -339,11 +348,10 @@
                             // Cierra el modal
                             $('#detalleModal').modal('hide');
 
-                            // Mostrar un mensaje de éxito indicando que la tarea está en progreso
-                            $('#message').text('Te has postulado exitosamente. La tarea ahora está en progreso.').show();
+                            showMessage('Te has postulado exitosamente. La tarea ahora está en progreso.', false);
                         } else {
                             // Muestra el error de manera creativa
-                            $('#message').text(data.error).show();
+                            showMessage('Error al postularse: ' + data.error, true);
                         }
                     });
                 }
@@ -353,7 +361,7 @@
                 if (tareaId) {
                     $.post('/finalizar/' + tareaId, function (data) {
                         if (data.success) {
-                            showMessage('La tarea ha sido marcada como finalizada.');
+                            showMessage('La tarea ha sido marcada como finalizada.', false);
 
                             // Actualiza visualmente el estado en la lista de tareas sin recargar la página
                             const taskItem = $(`.ver-detalles[data-id='${tareaId}']`).closest('.task-item');
@@ -487,7 +495,7 @@
                         utcTime = new Date(value.replace(' ', 'T'));
                         if (isNaN(utcTime)) throw new Error();
                     } catch (e) {
-                        return value; 
+                        return value;
                     }
 
                     let localTime = new Date(utcTime.getTime() - 5 * 60 * 60 * 1000);
@@ -514,7 +522,7 @@
                         utcTime = new Date(value.replace(' ', 'T'));
                         if (isNaN(utcTime)) throw new Error();
                     } catch (e) {
-                        return value; 
+                        return value;
                     }
 
                     let localTime = new Date(utcTime.getTime());
@@ -530,6 +538,8 @@
             }
 
         });
+
+
     </script>
 </body>
 

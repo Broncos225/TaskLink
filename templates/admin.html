@@ -32,7 +32,7 @@
                 <span class="mr-3 h4">{{ usuario_actual['Nombre'] }} {{ usuario_actual['Apellido'] }}</span>
                 <div class="btn-group dropstart">
                     <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de perfil" class="rounded-circle"
-                        style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown"
+                        style="width: 50px; height: 50px; cursor: pointer; object-fit: cover;" data-toggle="dropdown"
                         aria-expanded="false">
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{{ url_for('profile') }}">Perfil</a></li>
@@ -49,36 +49,62 @@
         </div>
     </nav>
 
-
     <div class="container mt-5">
         <div class="position-relative mb-4">
             <h2 class="text-center">Lista de Usuarios</h2>
-            <a href="{{ url_for('generar_reporte') }}" class="btn btn-primary position-absolute" style="right: 0; top: 0;">
-                <i class="fa fa-download mr-1"></i> Generar reporte
-            </a>            
+            <a href="{{ url_for('reporte_usuarios') }}" class="btn btn-primary position-absolute"
+                style="right: 0; top: 0;">
+                <i class="fa fa-download mr-1"></i> Reporte de usuarios
+            </a>
         </div>
-        <div class="row">
+        <div class="row d-flex align-items-stretch">
             {% for usuario in usuarios %}
-            <div class="col-md-4 mb-4">
-                <div class="card shadow-sm">
-                    <div class="card-body text-center">
-                        {% if usuario['FotoPerfil'] %}
-                        <img src="data:image/png;base64,{{ usuario['FotoPerfil'] }}" alt="Imagen de perfil"
-                            class="rounded-circle mb-3" style="width: 100px; height: 100px; cursor: pointer;"
-                            data-toggle="dropdown" aria-expanded="false">
-                        {% else %}
-                        <img src="path/to/default-image.png" alt="Imagen de perfil por defecto" class="rounded-circle"
-                            style="width: 50px; height: 50px;">
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card user-card shadow-sm border-0 rounded-lg h-100">
+                    <div class="card-body d-flex flex-column justify-content-between p-4 text-center">
+                        <div>
+                            <div class="user-image-wrapper mb-3">
+                                {% if usuario['FotoPerfil'] %}
+                                <img src="data:image/png;base64,{{ usuario['FotoPerfil'] }}" alt="Imagen de perfil"
+                                    class="rounded-circle user-image">
+                                {% else %}
+                                <img src="C:\Users\Maxwe\OneDrive\Documentos\GitHub\TaskLink\static\images\profileicon.png" alt="Imagen de perfil por defecto"
+                                    class="rounded-circle user-image">
+                                {% endif %}
+                            </div>
+
+                            <h5 class="card-title font-weight-bold">{{ usuario['Nombre'] }} {{ usuario['Apellido'] }}
+                            </h5>
+                            <p class="card-subtitle mb-2 text-muted"><strong>Email:</strong> {{ usuario['Correo'] }}</p>
+
+                            <div class="d-flex justify-content-around align-items-center mb-3">
+                                <span class="badge badge-info p-2">
+                                    <i class="fas fa-user-tag"></i> {{ usuario['tipo_usuario'] }}
+                                </span>
+                                <span
+                                    class="badge {{ 'badge-success' if usuario['estado_usuario'] == 'Activo' else 'badge-danger' }} p-2">
+                                    {{ usuario['estado_usuario'] }}
+                                </span>
+                                <span class="badge badge-primary p-2"><i class="fas fa-city"></i> {{ usuario['ciudad']
+                                    }}</span>
+                            </div>
+
+                            <p class="small text-muted">Fecha de Creación: {{ usuario['Fecha_creacion'] }}</p>
+                        </div>
+                        {% if usuario['ID_tipo_usuario'] == 1 %}
+                        <form action="{{ url_for('toggle_usuario', id_usuario=usuario['ID_usuario']) }}" method="post"
+                            onsubmit="return confirmAction(this);">
+                            <button type="submit"
+                                class="btn {{ 'btn-danger' if usuario['estado_usuario'] == 'Activo' else 'btn-success' }} btn-block"
+                                data-estado="{{ usuario['estado_usuario'] }}">
+                                <span style="position: relative; z-index: 1;">
+                                    {{ 'Desactivar' if usuario['estado_usuario'] == 'Activo' else 'Activar' }}
+                                </span>
+                            </button>
+                        </form>
                         {% endif %}
-                        <h5 class="card-title">{{ usuario['Nombre'] }} {{ usuario['Apellido'] }}</h5>
-                        <p class="card-text"><strong>Email:</strong> {{ usuario['Correo'] }}</p>
-                        <p class="card-text"><strong>Tipo de Usuario:</strong> {{ usuario['tipo_usuario'] }}</p>
-                        <p class="card-text"><strong>Estado:</strong>
-                            <span
-                                class="badge {{ 'bg-success text-white custom-badge-sm' if usuario['estado_usuario'] == 'Activo' else 'bg-danger text-white custom-badge-sm' }}">
-                                {{ usuario['estado_usuario'] }}
-                            </span>
-                        </p>
+
+
                     </div>
                 </div>
             </div>
@@ -86,12 +112,21 @@
         </div>
     </div>
 
-
     <!-- Integrar Bootstrap JS -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        function confirmAction(form) {
+            const button = form.querySelector('button'); 
+            const estado = button.getAttribute('data-estado'); 
+            const action = (estado === 'Activo') ? 'desactivar' : 'activar';
+            return confirm(`¿Estás seguro de que deseas ${action} este usuario?`); 
+        }
+    </script>
+
+
 </body>
 
 </html>

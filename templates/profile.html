@@ -14,7 +14,6 @@
 <body>
   <nav class="navbar navbar-expand-lg bg-body-tertiary">
     <div class="container-fluid d-flex justify-content-between align-items-center">
-      <!-- Logo y enlace a la izquierda -->
       <div class="d-flex align-items-center">
         <a class="navbar-brand" href="{{ url_for('index') }}">
           <img src="../static/images/LogoCompleto.png" alt="TaskLink Logo" width="200px">
@@ -25,14 +24,13 @@
         <a class="btn btn-outline-primary" href="{{ url_for('admin') }}">Administrar</a>
         {% endif %}
       </div>
-
-      <!-- Imagen de perfil y nombre a la derecha -->
       <div class="d-flex align-items-center">
         {% if imagen_base64 %}
         <span class="mr-3 h4">{{ usuarios['Nombre'] }} {{ usuarios['Apellido'] }}</span>
         <div class="btn-group dropstart">
           <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de perfil" class="rounded-circle"
-            style="width: 50px; height: 50px; cursor: pointer;" data-toggle="dropdown" aria-expanded="false">
+            style="width: 50px; height: 50px; cursor: pointer; object-fit: cover;" data-toggle="dropdown"
+            aria-expanded="false">
           <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="{{ url_for('profile') }}">Perfil</a></li>
             <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar sesión</a></li>
@@ -53,22 +51,16 @@
       <h2>Mi Perfil</h2>
     </div>
 
-
-    <!-- Información del Perfil -->
     <div class="card mb-4">
       <div class="card-body">
         <div class="row">
           <div class="col-md-3 text-center">
-
             <img src="data:image/png;base64,{{ imagen_base64 }}" alt="Imagen de usuario"
               class="rounded-circle img-thumbnail mb-4" style="width: 150px; height: 150px; object-fit: cover;">
-            <br />
-            <!-- Botón para abrir el modal de cambiar foto -->
             <button id="cambiar-foto-btn" class="btn btn-sm btn-outline-primary mt-2" data-toggle="modal"
               data-target="#cambiarFotoModal">
               Cambiar Foto
             </button>
-
             <!-- Modal para seleccionar la nueva foto de perfil -->
             <div class="modal fade" id="cambiarFotoModal" tabindex="-1" aria-labelledby="cambiarFotoModalLabel"
               aria-hidden="true">
@@ -119,7 +111,6 @@
       </div>
     </div>
 
-    <!-- Sección de Tareas Publicadas -->
     <div class="card mb-4">
       <div class="card-body">
         <h4>Mis Tareas Publicadas</h4>
@@ -127,50 +118,49 @@
           {% if tareas %}
           {% for tarea in tareas %}
           <div class="task-item mb-4 border p-4 rounded shadow-sm">
+            <!-- Contenido de cada tarea -->
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h3 class="mb-0 text-truncate-2">{{ tarea['Titulo'] }}</h3>
-              {% if tarea['Estado'] == 'Finalizada' %}
-              <span class="badge badge-success custom-badge">{{ tarea['Estado'] }}</span>
-              {% elif tarea['Estado'] == 'En Proceso' %}
-              <span class="badge badge-primary custom-badge">{{ tarea['Estado'] }}</span>
-              {% elif tarea['Estado'] == 'Cancelada' %}
-              <span class="badge badge-danger custom-badge">{{ tarea['Estado'] }}</span>
-              {% else %}
-              <span class="badge badge-secondary custom-badge">{{ tarea['Estado'] }}</span>
-              {% endif %}
-
+              <span class="badge custom-badge 
+              {% if tarea['Estado'] == 'Finalizada' %} badge-success
+              {% elif tarea['Estado'] == 'En Proceso' %} badge-primary
+              {% elif tarea['Estado'] == 'Cancelada' %} badge-danger
+              {% else %} badge-secondary
+              {% endif %}">
+                {{ tarea['Estado'] }}
+              </span>
             </div>
-
             <div class="d-flex justify-content-between text-muted mb-3">
-              <div>
-                <i class="fa fa-calendar-alt"></i> Creada el:
-                <strong>{{ tarea['Fecha_creacion'] | format_date }}</strong>
-              </div>
-              <div>
-                <i class="fa fa-hourglass-half"></i> Límite:
-                <strong>{{ tarea['Fecha_limite'] | format_date if tarea['Fecha_limite'] else 'No especificada'
-                  }}</strong>
-              </div>
+              <div><i class="fa fa-calendar-alt"></i> Creada el: <strong>{{ tarea['Fecha_creacion'] | format_date
+                  }}</strong></div>
+              <div><i class="fa fa-hourglass-half"></i> Límite: <strong>{{ tarea['Fecha_limite'] | format_date if
+                  tarea['Fecha_limite'] else 'No especificada' }}</strong></div>
             </div>
-
             <div class="mb-3">
               <h5 class="text-muted">Descripción</h5>
-              <p class="">{{ tarea['Descripcion'] }}</p>
+              <p>{{ tarea['Descripcion'] }}</p>
             </div>
-
             <div class="d-flex justify-content-between align-items-center">
               <div>
-                <p class="mb-0"><i class="fa fa-dollar-sign"></i> Valor: <strong>${{ tarea['Valor'] }}</strong>
-                </p>
-                {% if tarea['Adjuntos'] %}
-                <p class="mb-0 text-blue"><i class="fa fa-paperclip mr-1"></i><a>Hay archivos adjuntos</a></p>
-                {% else %}
-                <p class="mb-0 text-muted"><i class="fa fa-paperclip mr-1"></i>No hay adjuntos.</p>
-                {% endif %}
+                <p class="mb-0"><i class="fa fa-dollar-sign"></i> Valor: <strong>${{ tarea['Valor'] }}</strong></p>
+                <p class="mb-0"><i class="fa fa-paperclip"></i>{{ 'Hay archivos adjuntos' if tarea['Adjuntos'] else 'No
+                  hay adjuntos.' }}</p>
               </div>
             </div>
           </div>
           {% endfor %}
+          <!-- Paginación solo si hay 3 o más tareas -->
+          {% if total_tareas > per_page %}
+          <nav>
+            <ul class="pagination">
+              {% for i in range(1, (total_tareas // per_page) + 2) %}
+              <li class="page-item {% if i == page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('profile', page=i) }}">{{ i }}</a>
+              </li>
+              {% endfor %}
+            </ul>
+          </nav>
+          {% endif %}
           {% else %}
           <p>No hay tareas disponibles.</p>
           {% endif %}
@@ -179,17 +169,36 @@
     </div>
 
 
-
-
-
-
-
-
-    <!-- Bootstrap JS -->
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <!-- Sección de Reseñas -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h4>Reseñas</h4>
+        <div class="review-list" id="reviewList">
+          {% if reseñas %}
+          {% for reseña in reseñas %}
+          <div class="review-item mb-4 border p-4 rounded shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <strong>{{ reseña['Nombre_Usuario'] }} {{ reseña['Apellido_Usuario'] }}</strong>
+              <span class="text-muted">{{ reseña['Fecha'] | format_date }}</span>
+            </div>
+            <p>{{ reseña['Contenido'] }}</p> <!-- Asumiendo que hay un campo 'Contenido' en Reseñas -->
+            <div>
+              <strong>Calificación:</strong>
+              <span class="badge badge-warning">{{ reseña['calificacion'] }}</span> <!-- Mostrando la calificación -->
+            </div>
+          </div>
+          {% endfor %}
+          {% else %}
+          <p>No hay reseñas disponibles.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
   </div>
+
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 
 </html>

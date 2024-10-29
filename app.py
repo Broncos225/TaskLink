@@ -1,12 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, make_response
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, make_response, flash
 import sqlite3
 from flask_bcrypt import Bcrypt
 from functools import wraps
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
+from functools import wraps
 import os
 import io
 import base64
@@ -93,10 +93,66 @@ def sumar_cinco_horas(value):
     return value
 
 # ======================================================= #
+#                     VERIFICAR USUARIO                   #
+# ======================================================= #
+def verificar_usuario_activo(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        usuario_id = session.get('user_id')  # Obtener el ID del usuario de la sesión
+        if not usuario_id:
+            flash('Debes iniciar sesión primero.', 'danger')
+            return redirect(url_for('login'))
+
+        # Llamamos a la función para verificar si el usuario está activo
+        conn = get_db_connection()
+        estado_usuario = conn.execute(
+            'SELECT ID_estado_usuario FROM Usuarios WHERE ID_usuario = ?', 
+            (usuario_id,)
+        ).fetchone()
+        conn.close()
+        
+        # Verificamos si el usuario está inactivo (por ejemplo, estado 2)
+        if estado_usuario and estado_usuario['ID_estado_usuario'] != 1:
+            flash('Tu cuenta está inactiva y no puedes acceder a esta sección solo al perfil. Por favor, contacta al administrador.', 'warning')
+            return redirect(url_for('index'))  # Redirige al usuario al índice
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# ======================================================= #
+#              ACTIVAR O DESACTIVAR USUARIOS              #
+# ======================================================= #
+@app.route('/toggle_usuario/<int:id_usuario>', methods=['POST'])
+@login_requerido
+@verificar_usuario_activo
+def toggle_usuario(id_usuario):
+    conn = get_db_connection()
+    
+    # Verificar el tipo de usuario y el estado actual
+    usuario = conn.execute(
+        'SELECT ID_tipo_usuario, ID_estado_usuario FROM Usuarios WHERE ID_usuario = ?', (id_usuario,)
+    ).fetchone()
+    
+    # Solo cambiar estado si es tipo de usuario 1
+    if usuario and usuario['ID_tipo_usuario'] == 1:
+        nuevo_estado = 2 if usuario['ID_estado_usuario'] == 1 else 1  # Alternar entre Activo (1) e Inactivo (2)
+        
+        conn.execute(
+            'UPDATE Usuarios SET ID_estado_usuario = ? WHERE ID_usuario = ?', (nuevo_estado, id_usuario)
+        )
+        conn.commit()
+    
+    conn.close()
+    return redirect(url_for('admin'))  # Redirige de vuelta a la página de administración
+
+
+# ======================================================= #
 #                      ADMINISTRADOR                      #
 # ======================================================= #
 @app.route('/admin')
 @login_requerido
+@verificar_usuario_activo
 def admin():
     conn = get_db_connection()
 
@@ -108,19 +164,22 @@ def admin():
     
     is_logged_in = 'user_id' in session
     
+    # Consulta SQL que ahora incluye la ciudad y tipo de usuario
     usuarios = conn.execute('''
-        SELECT u.*, tu.nombre AS tipo_usuario, eu.Nombre AS estado_usuario
+        SELECT u.ID_usuario, u.Nombre, u.Apellido, u.Correo, u.FotoPerfil, 
+               tu.Nombre AS tipo_usuario, eu.Nombre AS estado_usuario, c.Nombre AS ciudad, 
+               u.Fecha_creacion, u.ID_tipo_usuario, u.ID_estado_usuario
         FROM Usuarios u
         JOIN Tipos_Usuarios tu ON u.ID_tipo_usuario = tu.ID_tipo_usuario
         JOIN Estados_Usuarios eu ON u.ID_estado_usuario = eu.ID_estado_usuario
+        JOIN Ciudades c ON u.ID_ciudad = c.ID_ciudad
     ''').fetchall()
     
     usuario_actual = conn.execute('SELECT Nombre, Apellido FROM Usuarios WHERE ID_usuario = ?', (session['user_id'],)).fetchone()
 
-    # Crear una nueva lista para almacenar los usuarios con imágenes codificadas
+    # Crear una lista de usuarios con imagenes y los datos necesarios
     usuarios_con_imagenes = []
     for usuario in usuarios:
-        # Convertir el Row a un diccionario
         usuario_dict = dict(usuario)
         if usuario_dict['FotoPerfil']:
             usuario_dict['FotoPerfil'] = base64.b64encode(usuario_dict['FotoPerfil']).decode('utf-8')
@@ -129,12 +188,15 @@ def admin():
     conn.close()
     return render_template('admin.html', usuarios=usuarios_con_imagenes, usuario_actual=usuario_actual, imagen_base64=imagen_base64, is_logged_in=is_logged_in)
 
+
+
 # ======================================================= #
-#                     GENERAR REPORTE                     #
+#                    REPORTE USUARIOS                     #
 # ======================================================= #
-@app.route('/generar_reporte')
+@app.route('/reporte_usuarios')
 @login_requerido
-def generar_reporte():
+@verificar_usuario_activo
+def reporte_usuarios():
     conn = get_db_connection()
     
     # Consulta SQL que une las tablas Usuarios, Estados_Usuarios, Tipos_Usuarios y Ciudades
@@ -153,53 +215,64 @@ def generar_reporte():
     
     # Crear una lista para almacenar los elementos del PDF
     elements = []
+    styles = getSampleStyleSheet()
 
     # Título del reporte
-    styles = getSampleStyleSheet()
     title = Paragraph("Reporte de Usuarios", styles['Title'])
     elements.append(title)
+    elements.append(Spacer(1, 12))
 
-    # Espacio después del título
-    elements.append(Paragraph("<br/>", styles['Normal']))
+    # Estilos personalizados
+    title_style = ParagraphStyle(
+        'title_style',
+        parent=styles['Heading2'],
+        textColor=colors.HexColor('#007bff'),
+        fontSize=12,
+        spaceAfter=8,
+        spaceBefore=8
+    )
+    label_style = ParagraphStyle(
+        'label_style',
+        parent=styles['Normal'],
+        textColor=colors.HexColor('#007bff'),
+        fontSize=10,
+        spaceAfter=2,
+        spaceBefore=2
+    )
+    value_style = styles['Normal']
 
-    # Encabezados de la tabla
-    headers = ["ID", "Nombre", "Apellido", "Correo", "Tipo de Usuario", "Estado", "Ciudad", "Fecha de Creación"]
-
-    # Datos de los usuarios
-    data = []
-    data.append(headers)  # Agregar encabezados
+    # Crear una tarjeta para cada usuario
     for usuario in usuarios:
-        row = [
-            usuario['ID_usuario'],
-            usuario['Nombre'],
-            usuario['Apellido'],
-            usuario['Correo'],
-            usuario['tipo_usuario'],
-            usuario['estado_usuario'],
-            usuario['ciudad'],
-            usuario['Fecha_creacion']  # Incluyendo la fecha de creación
+        # Título de la tarjeta de usuario
+        elements.append(Paragraph(f"Usuario ID: {usuario['ID_usuario']} - {usuario['Nombre']} {usuario['Apellido']}", title_style))
+        
+        # Tabla con detalles del usuario
+        details_data = [
+            [Paragraph("<b>Correo:</b>", label_style), Paragraph(usuario['Correo'], value_style)],
+            [Paragraph("<b>Tipo de Usuario:</b>", label_style), Paragraph(usuario['tipo_usuario'], value_style)],
+            [Paragraph("<b>Estado:</b>", label_style), Paragraph(usuario['estado_usuario'], value_style)],
+            [Paragraph("<b>Ciudad:</b>", label_style), Paragraph(usuario['ciudad'], value_style)],
+            [Paragraph("<b>Fecha de Creación:</b>", label_style), Paragraph(str(usuario['Fecha_creacion']), value_style)],
         ]
-        data.append(row)
 
-    # Crear la tabla
-    table = Table(data)
-
-    # Estilo de la tabla
-    style = TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#007bff')),  # Color de fondo azul para el encabezado
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),  # Color del texto del encabezado
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#add8e6')),  # Color de fondo azul claro para las filas
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),  # Líneas de la cuadrícula
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),  # Color del texto de las filas
-    ])
-    
-    table.setStyle(style)
-
-    # Agregar la tabla a los elementos
-    elements.append(table)
+        # Crear la tabla de detalles con estilo
+        details_table = Table(details_data, colWidths=[120, 250])
+        details_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e0f7fa')),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#007bff')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(details_table)
+        
+        # Separador entre usuarios
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph("<br/>", styles['Normal']))
+        elements.append(Spacer(1, 24))
 
     # Generar el PDF
     pdf.build(elements)
@@ -209,6 +282,116 @@ def generar_reporte():
     response = make_response(buffer.read())
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = 'attachment; filename=Reporte de usuarios.pdf'
+    
+    return response
+
+
+# ======================================================= #
+#                      REPORTE TAREAS                     #
+# ======================================================= #
+@app.route('/reporte_tareas')
+@login_requerido
+@verificar_usuario_activo
+def reporte_tareas():
+    conn = get_db_connection()
+    
+    # Consulta SQL que une las tablas Tareas, Estados_Tareas, Categorias y Usuarios
+    tareas = conn.execute('''
+        SELECT t.ID_tarea, t.Titulo, t.Descripcion, t.Fecha_creacion, t.Fecha_limite, 
+               t.Fecha_finalizacion, t.Valor, t.Calificacion, et.Descripcion AS estado_tarea, 
+               c.Nombre AS categoria, uc.Nombre || ' ' || uc.Apellido AS creador, 
+               ut.Nombre || ' ' || ut.Apellido AS trabajador
+        FROM Tareas t
+        JOIN Estados_Tareas et ON t.ID_estado_tarea = et.ID_estado_tarea
+        JOIN Categorias c ON t.ID_categoria = c.ID_categoria
+        JOIN Usuarios uc ON t.ID_creador = uc.ID_usuario
+        LEFT JOIN Usuarios ut ON t.ID_trabajador = ut.ID_usuario
+    ''').fetchall()
+
+    # Crear un buffer para el PDF
+    buffer = io.BytesIO()
+    pdf = SimpleDocTemplate(buffer, pagesize=letter)
+    
+    # Crear una lista para almacenar los elementos del PDF
+    elements = []
+    styles = getSampleStyleSheet()
+
+    # Título del reporte
+    title = Paragraph("Reporte de Tareas", styles['Title'])
+    elements.append(title)
+    elements.append(Spacer(1, 12))
+
+    # Estilos personalizados
+    title_style = ParagraphStyle(
+        'title_style',
+        parent=styles['Heading2'],
+        textColor=colors.HexColor('#007bff'),
+        fontSize=12,
+        spaceAfter=8,
+        spaceBefore=8
+    )
+    label_style = ParagraphStyle(
+        'label_style',
+        parent=styles['Normal'],
+        textColor=colors.HexColor('#007bff'),
+        fontSize=10,
+        spaceAfter=2,
+        spaceBefore=2
+    )
+    value_style = styles['Normal']
+
+    # Crear una tarjeta para cada tarea
+    for tarea in tareas:
+        # Título de la tarea
+        elements.append(Paragraph(f"Tarea ID: {tarea['ID_tarea']} - {tarea['Titulo']}", title_style))
+        
+        # Tabla con detalles de la tarea
+        details_data = [
+            [Paragraph("<b>Estado:</b>", label_style), Paragraph(tarea['estado_tarea'], value_style)],
+            [Paragraph("<b>Categoría:</b>", label_style), Paragraph(tarea['categoria'], value_style)],
+            [Paragraph("<b>Fecha de Creación:</b>", label_style), Paragraph(str(tarea['Fecha_creacion']), value_style)],
+            [Paragraph("<b>Fecha Límite:</b>", label_style), Paragraph(str(tarea['Fecha_limite']), value_style)],
+            [Paragraph("<b>Fecha de Finalización:</b>", label_style), Paragraph(str(tarea['Fecha_finalizacion']), value_style)],
+            [Paragraph("<b>Valor:</b>", label_style), Paragraph(f"{tarea['Valor']:.2f}", value_style)],
+            [Paragraph("<b>Calificación:</b>", label_style), Paragraph(str(tarea['Calificacion']), value_style)],
+            [Paragraph("<b>Creador:</b>", label_style), Paragraph(tarea['creador'], value_style)],
+            [Paragraph("<b>Trabajador:</b>", label_style), Paragraph(tarea['trabajador'] if tarea['trabajador'] else 'No asignado', value_style)],
+        ]
+
+        # Crear la tabla de detalles con estilo
+        details_table = Table(details_data, colWidths=[100, 300])
+        details_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e0f7fa')),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#007bff')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(details_table)
+        
+        # Espacio antes de la descripción
+        elements.append(Spacer(1, 8))
+
+        # Descripción de la tarea
+        elements.append(Paragraph("<b>Descripción:</b>", label_style))
+        elements.append(Paragraph(tarea['Descripcion'], value_style))
+
+        # Separador entre tareas
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph("<br/>", styles['Normal']))
+        elements.append(Spacer(1, 24))
+
+    # Generar el PDF
+    pdf.build(elements)
+
+    # Regresar al cliente como un archivo PDF
+    buffer.seek(0)
+    response = make_response(buffer.read())
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'attachment; filename=Reporte de tareas.pdf'
     
     return response
 
@@ -246,6 +429,7 @@ def index():
 # ======================================================= #
 @app.route('/calificar/<int:tarea_id>', methods=['POST'])
 @login_requerido
+@verificar_usuario_activo
 def calificar_tarea(tarea_id):
     calificacion = request.form['calificacion']
     usuario_actual = session['user_id']
@@ -280,6 +464,7 @@ def calificar_tarea(tarea_id):
 # ======================================================= #
 @app.route('/tareas')
 @login_requerido
+@verificar_usuario_activo
 def tareas():
     conn = get_db_connection()
     
@@ -353,6 +538,7 @@ def tareas():
 # ======================================================= #
 @app.route('/postular/<int:tarea_id>', methods=['POST'])
 @login_requerido
+@verificar_usuario_activo
 def postular(tarea_id):
     usuario_actual = session['user_id']
     conn = get_db_connection()
@@ -384,11 +570,13 @@ def postular(tarea_id):
     return jsonify({'success': False, 'error': 'No puedes postularte a esta tarea.'})
 
 
+
 # ======================================================= #
 #                      FINALIZAR TAREA                    #
 # ======================================================= #
 @app.route('/finalizar/<int:tarea_id>', methods=['POST'])
 @login_requerido
+@verificar_usuario_activo
 def finalizar_tarea(tarea_id):
     usuario_actual = session['user_id']
     conn = get_db_connection()
@@ -422,6 +610,7 @@ def finalizar_tarea(tarea_id):
 # ======================================================= #
 @app.route('/detalles/<int:tarea_id>')
 @login_requerido
+@verificar_usuario_activo
 def detalles_tarea(tarea_id):
     conn = get_db_connection()
     tarea = conn.execute('SELECT * FROM Tareas WHERE ID_tarea = ?', (tarea_id,)).fetchone()
@@ -466,6 +655,7 @@ def detalles_tarea(tarea_id):
 # ======================================================= #
 @app.route('/agregar_solicitud', methods=['GET', 'POST'])
 @login_requerido
+@verificar_usuario_activo
 def agregar_solicitud():
     conn = get_db_connection()
     categorias = conn.execute('SELECT ID_categoria, Nombre FROM Categorias').fetchall()
@@ -497,10 +687,23 @@ def agregar_solicitud():
         estado = 1
         
         conn = get_db_connection()
+        
+        # Insertar la nueva tarea en la tabla Tareas
         conn.execute('''
             INSERT INTO Tareas (Titulo, Descripcion, Fecha_limite, Valor, Adjuntos, ID_estado_tarea, ID_categoria, ID_creador, ID_trabajador)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (titulo, descripcion, fecha_limite, valor, adjunto, estado, categoria, session['user_id'], None))
+        
+        # Obtener el ID de la tarea recién creada
+        tarea_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        
+        # Obtener todos los trabajadores para enviarles una notificación
+        trabajadores = conn.execute('SELECT ID_usuario FROM Usuarios WHERE ID_usuario != ?', (session['user_id'],)).fetchall()
+
+        # Insertar notificaciones para cada trabajador
+        for trabajador in trabajadores:
+            conn.execute('INSERT INTO Notificaciones (usuario_id, tarea_id) VALUES (?, ?)', (trabajador['ID_usuario'], tarea_id))
+        
         conn.commit()
         conn.close()
         
@@ -508,6 +711,46 @@ def agregar_solicitud():
     
     return render_template('agregar_solicitud.html', usuarios=usuarios, categorias=categorias, imagen_base64=imagen_base64, is_logged_in=is_logged_in)
 
+# ======================================================= #
+#                      NOTIFICACIONES                     #
+# ======================================================= #
+@app.route('/notificaciones')
+@login_requerido
+def notificaciones():
+    try:
+        usuario_actual = session['user_id']
+        conn = get_db_connection()
+
+        # Obtener las notificaciones no notificadas junto con el título y el valor de la tarea
+        notificaciones = conn.execute('''
+            SELECT N.id, N.usuario_id, N.tarea_id, N.notificado, T.Titulo, T.Valor
+            FROM Notificaciones N
+            JOIN Tareas T ON N.tarea_id = T.ID_tarea
+            WHERE N.usuario_id = ? AND N.notificado = FALSE
+        ''', (usuario_actual,)).fetchall()
+
+        print(notificaciones)  # Para verificar qué datos se obtienen
+
+        # Marcar las notificaciones como notificadas
+        if notificaciones:
+            conn.execute('UPDATE Notificaciones SET notificado = TRUE WHERE usuario_id = ?', (usuario_actual,))
+            conn.commit()
+
+        conn.close()
+
+        # Convertir las notificaciones a formato JSON, incluyendo el título y el valor de la tarea
+        return jsonify([{
+            "id": notification["id"],
+            "usuario_id": notification["usuario_id"],
+            "tarea_id": notification["tarea_id"],
+            "notificado": notification["notificado"],
+            "Titulo": notification["Titulo"],
+            "Valor": notification["Valor"]  # Incluye el valor de la tarea
+        } for notification in notificaciones])
+
+    except Exception as e:
+        print(f"Error en la ruta /notificaciones: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 # ======================================================= #
@@ -515,6 +758,7 @@ def agregar_solicitud():
 # ======================================================= #
 @app.route('/editar_perfil', methods=['GET'])
 @login_requerido
+@verificar_usuario_activo
 def editar_perfil():
     conn = get_db_connection()
     ciudades = conn.execute('SELECT ID_ciudad, Nombre FROM Ciudades').fetchall()
@@ -532,6 +776,7 @@ def editar_perfil():
 
 @app.route('/actualizar-perfil', methods=['POST'])
 @login_requerido
+@verificar_usuario_activo
 def actualizar_perfil():
     nombre = request.form.get('nombre')
     apellido = request.form.get('apellido')
@@ -567,6 +812,7 @@ def actualizar_perfil():
 # ======================================================= #
 @app.route('/cambiar-foto', methods=['POST'])
 @login_requerido
+@verificar_usuario_activo
 def cambiarFoto():
     if 'nueva_foto' not in request.files:
         print('No seleccionaste ningún archivo')
@@ -596,11 +842,10 @@ def cambiarFoto():
 # ======================================================= #
 #                      PERFIL USUARIO                     #
 # ======================================================= #
-@app.route('/profile')
+@app.route('/profile', methods=['GET'])
 @login_requerido
 def profile():
     conn = get_db_connection()
-
     usuarios = conn.execute('''
         SELECT U.*, T.Nombre AS Tipo_Usuario, E.Nombre AS Estado_Usuario, C.Nombre AS Ciudad
         FROM Usuarios U
@@ -610,12 +855,46 @@ def profile():
         WHERE U.ID_usuario = ?
     ''', (session['user_id'],)).fetchone()
 
+    # Paginación de tareas
+    page = request.args.get('page', 1, type=int)
+    per_page = 2  # Número de tareas por página
+    offset = (page - 1) * per_page
+
     tareas = conn.execute('''
         SELECT T.*, T.Fecha_limite, EST.Descripcion AS Estado
         FROM Tareas T
         JOIN Estados_Tareas EST ON T.ID_estado_tarea = EST.ID_estado_tarea
         WHERE T.ID_creador = ?
-    ''', (session['user_id'],)).fetchall()
+        LIMIT ? OFFSET ?
+    ''', (session['user_id'], per_page, offset)).fetchall()
+
+    total_tareas = conn.execute('''
+        SELECT COUNT(*) FROM Tareas WHERE ID_creador = ?
+    ''', (session['user_id'],)).fetchone()[0]
+
+    # Obtener reseñas de las tareas
+    reseñas = []
+    for tarea in tareas:
+        reseña = conn.execute('''
+            SELECT R.*, U.Nombre AS Nombre_Usuario, U.Apellido AS Apellido_Usuario
+            FROM Reseñas R
+            JOIN Usuarios U ON R.ID_usuario = U.ID_usuario
+            WHERE R.ID_tarea = ?
+        ''', (tarea['ID_tarea'],)).fetchall()
+        
+        # Agregar reseña y calificación
+        for r in reseña:
+            # Crear un nuevo diccionario que combine los datos de la reseña y la calificación
+            reseña_combinada = {
+                'ID_reseña': r['ID_reseña'],
+                'ID_usuario': r['ID_usuario'],
+                'Contenido': r['Contenido'],
+                'Nombre_Usuario': r['Nombre_Usuario'],
+                'Apellido_Usuario': r['Apellido_Usuario'],
+                'Fecha': r['Fecha'],
+                'calificacion': tarea['Calificacion']  # Agregar la calificación aquí
+            }
+            reseñas.append(reseña_combinada)
 
 
     conn.close()
@@ -624,7 +903,9 @@ def profile():
     if usuarios['FotoPerfil']:
         imagen_base64 = base64.b64encode(usuarios['FotoPerfil']).decode('utf-8')
 
-    return render_template('profile.html', usuarios=usuarios, imagen_base64=imagen_base64, tareas=tareas)
+    return render_template('profile.html', usuarios=usuarios, imagen_base64=imagen_base64, tareas=tareas,
+                           reseñas=reseñas, page=page, total_tareas=total_tareas, per_page=per_page)
+
 
 # ======================================================= #
 #                    REGISTRAR USUARIO                    #
