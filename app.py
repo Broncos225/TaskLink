@@ -298,14 +298,15 @@ def reporte_tareas():
     # Consulta SQL que une las tablas Tareas, Estados_Tareas, Categorias y Usuarios
     tareas = conn.execute('''
         SELECT t.ID_tarea, t.Titulo, t.Descripcion, t.Fecha_creacion, t.Fecha_limite, 
-               t.Fecha_finalizacion, t.Valor, t.Calificacion, et.Descripcion AS estado_tarea, 
-               c.Nombre AS categoria, uc.Nombre || ' ' || uc.Apellido AS creador, 
-               ut.Nombre || ' ' || ut.Apellido AS trabajador
+            t.Fecha_finalizacion, t.Valor, r.Calificacion, et.Descripcion AS estado_tarea, 
+            c.Nombre AS categoria, uc.Nombre || ' ' || uc.Apellido AS creador, 
+            ut.Nombre || ' ' || ut.Apellido AS trabajador
         FROM Tareas t
         JOIN Estados_Tareas et ON t.ID_estado_tarea = et.ID_estado_tarea
         JOIN Categorias c ON t.ID_categoria = c.ID_categoria
         JOIN Usuarios uc ON t.ID_creador = uc.ID_usuario
         LEFT JOIN Usuarios ut ON t.ID_trabajador = ut.ID_usuario
+        LEFT JOIN Reseñas r ON t.ID_tarea = r.ID_tarea  -- Añadimos LEFT JOIN para obtener calificaciones
     ''').fetchall()
 
     # Crear un buffer para el PDF
@@ -432,11 +433,13 @@ def index():
 @verificar_usuario_activo
 def calificar_tarea(tarea_id):
     calificacion = request.form['calificacion']
+    contenido_reseña = request.form.get('contenido', '')  # Texto opcional de la reseña
     usuario_actual = session['user_id']
     conn = get_db_connection()
 
-    # Verificar si el usuario es el creador de la tarea y si ya está calificada
-    tarea = conn.execute('SELECT ID_creador, Calificacion FROM Tareas WHERE ID_tarea = ?', (tarea_id,)).fetchone()
+    # Verificar si el usuario es el creador de la tarea y si ya está calificada en la tabla de Reseñas
+    tarea = conn.execute('SELECT ID_creador FROM Tareas WHERE ID_tarea = ?', (tarea_id,)).fetchone()
+    reseña_existente = conn.execute('SELECT 1 FROM Reseñas WHERE ID_tarea = ?', (tarea_id,)).fetchone()
 
     if tarea is None:
         conn.close()
@@ -446,16 +449,21 @@ def calificar_tarea(tarea_id):
         conn.close()
         return jsonify({'success': False, 'error': 'Solo el creador de la tarea puede calificarla.'})
 
-    if tarea['Calificacion'] is not None and tarea['Calificacion'] != 0:
+    if reseña_existente:
         conn.close()
         return jsonify({'success': False, 'error': 'Esta tarea ya ha sido calificada.'})
 
-    # Guardar la calificación en la base de datos
-    conn.execute('UPDATE Tareas SET Calificacion = ? WHERE ID_tarea = ?', (calificacion, tarea_id))
+    # Guardar la reseña en la base de datos
+    conn.execute(
+        'INSERT INTO Reseñas (ID_tarea, Contenido, Calificacion) VALUES (?, ?, ?)',
+        (tarea_id, contenido_reseña, calificacion)
+    )
     conn.commit()
     conn.close()
 
     return jsonify({'success': True, 'message': 'Calificación registrada exitosamente.'})
+
+
 
 
 
@@ -484,12 +492,13 @@ def tareas():
                U1.Apellido AS CreadorApellido, 
                U2.Nombre AS TrabajadorNombre, 
                U2.Apellido AS TrabajadorApellido,
-               T.Calificacion  -- Añadir la columna de calificación
+               R.Calificacion  -- Cambiamos de T.Calificacion a R.Calificacion
         FROM Tareas T
         JOIN Categorias C ON T.ID_categoria = C.ID_categoria
         JOIN Estados_Tareas ET ON T.ID_estado_tarea = ET.ID_estado_tarea
         LEFT JOIN Usuarios U1 ON T.ID_creador = U1.ID_usuario
         LEFT JOIN Usuarios U2 ON T.ID_trabajador = U2.ID_usuario
+        LEFT JOIN Reseñas R ON T.ID_tarea = R.ID_tarea  -- Añadimos un LEFT JOIN para las reseñas
     '''
     
     conditions = []
@@ -530,6 +539,7 @@ def tareas():
                            usuarios=usuarios, is_logged_in=is_logged_in, 
                            categoria_filtro=categoria_filtro, estado_filtro=estado_filtro, 
                            orden=orden)
+
 
 
 
@@ -872,30 +882,26 @@ def profile():
         SELECT COUNT(*) FROM Tareas WHERE ID_creador = ?
     ''', (session['user_id'],)).fetchone()[0]
 
-    # Obtener reseñas de las tareas
-    reseñas = []
-    for tarea in tareas:
-        reseña = conn.execute('''
-            SELECT R.*, U.Nombre AS Nombre_Usuario, U.Apellido AS Apellido_Usuario
-            FROM Reseñas R
-            JOIN Usuarios U ON R.ID_usuario = U.ID_usuario
-            WHERE R.ID_tarea = ?
-        ''', (tarea['ID_tarea'],)).fetchall()
-        
-        # Agregar reseña y calificación
-        for r in reseña:
-            # Crear un nuevo diccionario que combine los datos de la reseña y la calificación
-            reseña_combinada = {
-                'ID_reseña': r['ID_reseña'],
-                'ID_usuario': r['ID_usuario'],
-                'Contenido': r['Contenido'],
-                'Nombre_Usuario': r['Nombre_Usuario'],
-                'Apellido_Usuario': r['Apellido_Usuario'],
-                'Fecha': r['Fecha'],
-                'calificacion': tarea['Calificacion']  # Agregar la calificación aquí
-            }
-            reseñas.append(reseña_combinada)
+    # Paginación de reseñas
+    review_page = request.args.get('review_page', 1, type=int)
+    reviews_per_page = 2  # Número de reseñas por página
+    review_offset = (review_page - 1) * reviews_per_page
 
+    # Obtener las reseñas de las tareas creadas por el usuario
+    reseñas = conn.execute('''
+        SELECT R.*, U.Nombre AS Nombre_Usuario, U.Apellido AS Apellido_Usuario, R.Fecha AS Fecha, T.Titulo AS Titulo_Tarea
+        FROM Reseñas R
+        JOIN Tareas T ON R.ID_tarea = T.ID_tarea
+        JOIN Usuarios U ON T.ID_creador = U.ID_usuario
+        WHERE T.ID_trabajador = ?
+        LIMIT ? OFFSET ?
+    ''', (session['user_id'], reviews_per_page, review_offset)).fetchall()
+
+    total_reseñas = conn.execute('''
+        SELECT COUNT(*) FROM Reseñas R
+        JOIN Tareas T ON R.ID_tarea = T.ID_tarea
+        WHERE T.ID_trabajador = ?
+    ''', (session['user_id'],)).fetchone()[0]
 
     conn.close()
 
@@ -904,7 +910,9 @@ def profile():
         imagen_base64 = base64.b64encode(usuarios['FotoPerfil']).decode('utf-8')
 
     return render_template('profile.html', usuarios=usuarios, imagen_base64=imagen_base64, tareas=tareas,
-                           reseñas=reseñas, page=page, total_tareas=total_tareas, per_page=per_page)
+                           page=page, total_tareas=total_tareas, per_page=per_page, reseñas=reseñas,
+                           review_page=review_page, total_reseñas=total_reseñas, reviews_per_page=reviews_per_page)
+
 
 
 # ======================================================= #

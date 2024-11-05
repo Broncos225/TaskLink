@@ -172,33 +172,56 @@
     <!-- Sección de Reseñas -->
     <div class="card mb-4">
       <div class="card-body">
-        <h4>Reseñas</h4>
+        <h4>Mis Reseñas</h4>
         <div class="review-list" id="reviewList">
           {% if reseñas %}
           {% for reseña in reseñas %}
           <div class="review-item mb-4 border p-4 rounded shadow-sm">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <strong>{{ reseña['Nombre_Usuario'] }} {{ reseña['Apellido_Usuario'] }}</strong>
-              <span class="text-muted">{{ reseña['Fecha'] | format_date }}</span>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <strong><h5>{{ reseña.Nombre_Usuario }} {{ reseña.Apellido_Usuario }}</h5></strong>
+              <p><strong>Fecha de calificacion: </strong><span class="text-muted">{{ reseña.Fecha | format_date }}</span></p>
             </div>
-            <p>{{ reseña['Contenido'] }}</p> <!-- Asumiendo que hay un campo 'Contenido' en Reseñas -->
-            <div>
-              <strong>Calificación:</strong>
-              <span class="badge badge-warning">{{ reseña['calificacion'] }}</span> <!-- Mostrando la calificación -->
+            <p><strong>Tarea: </strong>{{ reseña.Titulo_Tarea }}</p>
+            <p>{{ reseña.Contenido }}</p>
+            <div class="d-flex align-items-center">
+              <div class="stars-display">
+                {% for i in range(5) %}
+                {% if i < reseña.Calificacion %} <i class="fas fa-star text-warning"></i>
+                  {% else %}
+                  <i class="fas fa-star text-muted"></i>
+                  {% endif %}
+                  {% endfor %}
+              </div>
+              <span class="ms-2 text-muted">({{ reseña.Calificacion }})</span>
             </div>
           </div>
           {% endfor %}
+
+          <!-- Paginación de reseñas -->
+          {% if total_reseñas > reviews_per_page %}
+          <nav>
+            <ul class="pagination">
+              {% for i in range(1, (total_reseñas // reviews_per_page) + 2) %}
+              <li class="page-item {% if i == review_page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('profile', page=page, review_page=i) }}">{{ i }}</a>
+              </li>
+              {% endfor %}
+            </ul>
+          </nav>
+          {% endif %}
           {% else %}
           <p>No hay reseñas disponibles.</p>
           {% endif %}
         </div>
       </div>
     </div>
-  </div>
 
-  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
-  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 
 </html>
