@@ -19,6 +19,9 @@ app = Flask(__name__)
 app.secret_key = 'mi_secreto'
 bcrypt = Bcrypt(app)
 
+# ======================================================= #
+#               SINGLETON DATABASE MANAGER                #
+# ======================================================= #
 class DatabaseManager:
     _instance = None
     _lock = threading.Lock()
@@ -39,6 +42,9 @@ class DatabaseManager:
 # Variable global del singleton
 db_manager = DatabaseManager()
 
+# ======================================================= #
+#          TEMPLATE METHOD: GENERADOR DE REPORTES         #
+# ======================================================= #
 class ReportGenerator(ABC):
     def __init__(self):
         self.buffer = io.BytesIO()
@@ -98,7 +104,9 @@ class ReportGenerator(ABC):
         self.buffer.seek(0)
         return self.buffer
 
-# Implementación concreta para reporte de usuarios
+# ======================================================= #
+#             IMPLEMENTACIONES DE REPORTES                #
+# ======================================================= #
 class UserReportGenerator(ReportGenerator):
     def get_data(self, conn):
         return conn.execute('''
@@ -201,7 +209,9 @@ class TaskReportGenerator(ReportGenerator):
             self.elements.append(Paragraph("<br/>", self.styles['Normal']))
             self.elements.append(Spacer(1, 24))
 
-# Factory Method
+# ======================================================= #
+#              FACTORY METHOD: REPORTES                   #
+# ======================================================= #
 class ReportFactory:
     @staticmethod
     def create_report(report_type):
@@ -220,7 +230,9 @@ class ReportFactory:
 
 from abc import ABC, abstractmethod
 
-# Interfaz Observer
+# ======================================================= #
+#              PATRÓN OBSERVER (INTERFACES)               #
+# ======================================================= #
 class Observer(ABC):
     @abstractmethod
     def update(self, tarea_id, titulo, valor):
@@ -240,7 +252,9 @@ class Subject(ABC):
     def notify(self, tarea_id, titulo, valor):
         pass
 
-# Observer concreto para notificaciones de usuarios
+# ======================================================= #
+#            SISTEMA DE NOTIFICACIONES (OBSERVER)         #
+# ======================================================= #
 class UserNotificationObserver(Observer):
     def __init__(self, usuario_id):
         self.usuario_id = usuario_id
@@ -315,13 +329,18 @@ def get_task_notifier():
         task_notifier = TaskNotificationSubject()
     return task_notifier
 
+# ======================================================= #
+#             STRATEGY: FILTRADO DE TAREAS                #
+# ======================================================= #
 class TaskFilterStrategy(ABC):
     @abstractmethod
     def apply_filter(self, conditions, params, filter_value):
         """Aplica el filtro específico a las condiciones y parámetros"""
         pass
 
-# Interfaz para estrategias de ordenamiento
+# ======================================================= #
+#             STRATEGY: ORDENAMIENTO TAREAS               #
+# ======================================================= #
 class TaskSortStrategy(ABC):
     @abstractmethod
     def get_order_clause(self, sort_order):
@@ -354,7 +373,9 @@ class ValueSortStrategy(TaskSortStrategy):
     def get_order_clause(self, sort_order):
         return f'ORDER BY T.Valor {sort_order}'
 
-# Contexto que utiliza las estrategias
+# ======================================================= #
+#             CONTEXTO Y CONSTRUCTOR DE QUERIES           #
+# ======================================================= #
 class TaskQueryBuilder:
     def __init__(self):
         self.base_query = '''
@@ -423,6 +444,9 @@ class TaskQueryBuilder:
 # Instancia global del query builder
 task_query_builder = TaskQueryBuilder()
 
+# ======================================================= #
+#              PATRÓN DECORATOR (PROCESAMIENTO)           #
+# ======================================================= #
 class DataProcessor(ABC):
     @abstractmethod
     def process(self, data):
@@ -441,7 +465,9 @@ class DataProcessorDecorator(DataProcessor):
     def process(self, data):
         return self._processor.process(data)
 
-# Decoradores concretos para validación
+# ======================================================= #
+#              DECORADORES DE VALIDACIÓN                  #
+# ======================================================= #
 class EmailValidatorDecorator(DataProcessorDecorator):
     def process(self, data):
         data = super().process(data)
@@ -489,7 +515,9 @@ class IdentificationValidatorDecorator(DataProcessorDecorator):
                 data['errors'].append('La identificación debe contener entre 6 y 15 dígitos')
         return data
 
-# Decoradores para formateo/transformación
+# ======================================================= #
+#               DECORADOR DE FORMATO DATOS                #
+# ======================================================= #
 class DataFormatterDecorator(DataProcessorDecorator):
     def process(self, data):
         data = super().process(data)
@@ -506,7 +534,9 @@ class DataFormatterDecorator(DataProcessorDecorator):
             data['phone_formatted'] = phone_clean
         return data
 
-# Factory para crear procesadores decorados
+# ======================================================= #
+#             FACTORY DE PROCESADORES DE DATOS            #
+# ======================================================= #
 class UserDataProcessorFactory:
     @staticmethod
     def create_registration_processor():
