@@ -55,7 +55,7 @@ El proyecto sigue una arquitectura **Monolítica basada en el patrón MVC (Model
 
 ### 2. Clonar el repositorio
 ```bash
-git clone [https://github.com/tu-usuario/TaskLink.git](https://github.com/tu-usuario/TaskLink.git)
+git clone [https://github.com/Broncos225/TaskLink.git](https://github.com/tu-usuario/TaskLink.git)
 cd TaskLink
 ```
 ### 3. Configurar entorno virtual (Opcional pero recomendado)
