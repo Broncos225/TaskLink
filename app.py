@@ -2,24 +2,540 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 import sqlite3
 from flask_bcrypt import Bcrypt
 from functools import wraps
+from abc import ABC, abstractmethod
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
 from functools import wraps
 import os
+import re
 import io
 import base64
+import threading
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.secret_key = 'mi_secreto'
 bcrypt = Bcrypt(app)
 
-def get_db_connection():
-    conn = sqlite3.connect('TaskLink.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+class DatabaseManager:
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(DatabaseManager, cls).__new__(cls)
+        return cls._instance
+    
+    def get_connection(self):
+        """Retorna una nueva conexión para cada llamada"""
+        conn = sqlite3.connect('TaskLink.db')
+        conn.row_factory = sqlite3.Row
+        return conn
+
+# Variable global del singleton
+db_manager = DatabaseManager()
+
+class ReportGenerator(ABC):
+    def __init__(self):
+        self.buffer = io.BytesIO()
+        self.pdf = SimpleDocTemplate(self.buffer, pagesize=letter)
+        self.elements = []
+        self.styles = getSampleStyleSheet()
+        self._setup_custom_styles()
+    
+    def _setup_custom_styles(self):
+        """Configurar estilos personalizados comunes"""
+        self.title_style = ParagraphStyle(
+            'title_style',
+            parent=self.styles['Heading2'],
+            textColor=colors.HexColor('#007bff'),
+            fontSize=12,
+            spaceAfter=8,
+            spaceBefore=8
+        )
+        self.label_style = ParagraphStyle(
+            'label_style',
+            parent=self.styles['Normal'],
+            textColor=colors.HexColor('#007bff'),
+            fontSize=10,
+            spaceAfter=2,
+            spaceBefore=2
+        )
+        self.value_style = self.styles['Normal']
+    
+    @abstractmethod
+    def get_data(self, conn):
+        """Método abstracto para obtener datos específicos"""
+        pass
+    
+    @abstractmethod
+    def get_title(self):
+        """Método abstracto para obtener el título del reporte"""
+        pass
+    
+    @abstractmethod
+    def create_content(self, data):
+        """Método abstracto para crear el contenido específico del reporte"""
+        pass
+    
+    def generate_report(self, conn):
+        """Método template que genera el reporte completo"""
+        # Título
+        title = Paragraph(self.get_title(), self.styles['Title'])
+        self.elements.append(title)
+        self.elements.append(Spacer(1, 12))
+        
+        # Obtener datos y crear contenido
+        data = self.get_data(conn)
+        self.create_content(data)
+        
+        # Generar PDF
+        self.pdf.build(self.elements)
+        self.buffer.seek(0)
+        return self.buffer
+
+# Implementación concreta para reporte de usuarios
+class UserReportGenerator(ReportGenerator):
+    def get_data(self, conn):
+        return conn.execute('''
+            SELECT u.ID_usuario, u.Nombre, u.Apellido, u.Correo, tu.Nombre AS tipo_usuario,
+                   eu.Nombre AS estado_usuario, c.Nombre AS ciudad, u.Fecha_creacion
+            FROM Usuarios u
+            JOIN Estados_Usuarios eu ON u.ID_estado_usuario = eu.ID_estado_usuario
+            JOIN Tipos_Usuarios tu ON u.ID_tipo_usuario = tu.ID_tipo_usuario
+            JOIN Ciudades c ON u.ID_ciudad = c.ID_ciudad
+        ''').fetchall()
+    
+    def get_title(self):
+        return "Reporte de Usuarios"
+    
+    def create_content(self, usuarios):
+        for usuario in usuarios:
+            # Título de la tarjeta de usuario
+            self.elements.append(Paragraph(f"Usuario ID: {usuario['ID_usuario']} - {usuario['Nombre']} {usuario['Apellido']}", self.title_style))
+            
+            # Tabla con detalles del usuario
+            details_data = [
+                [Paragraph("<b>Correo:</b>", self.label_style), Paragraph(usuario['Correo'], self.value_style)],
+                [Paragraph("<b>Tipo de Usuario:</b>", self.label_style), Paragraph(usuario['tipo_usuario'], self.value_style)],
+                [Paragraph("<b>Estado:</b>", self.label_style), Paragraph(usuario['estado_usuario'], self.value_style)],
+                [Paragraph("<b>Ciudad:</b>", self.label_style), Paragraph(usuario['ciudad'], self.value_style)],
+                [Paragraph("<b>Fecha de Creación:</b>", self.label_style), Paragraph(str(usuario['Fecha_creacion']), self.value_style)],
+            ]
+            
+            details_table = Table(details_data, colWidths=[120, 250])
+            details_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e0f7fa')),
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#007bff')),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ]))
+            self.elements.append(details_table)
+            self.elements.append(Spacer(1, 12))
+            self.elements.append(Paragraph("<br/>", self.styles['Normal']))
+            self.elements.append(Spacer(1, 24))
+
+# Implementación concreta para reporte de tareas
+class TaskReportGenerator(ReportGenerator):
+    def get_data(self, conn):
+        return conn.execute('''
+            SELECT t.ID_tarea, t.Titulo, t.Descripcion, t.Fecha_creacion, t.Fecha_limite, 
+                t.Fecha_finalizacion, t.Valor, r.Calificacion, et.Descripcion AS estado_tarea, 
+                c.Nombre AS categoria, uc.Nombre || ' ' || uc.Apellido AS creador, 
+                ut.Nombre || ' ' || ut.Apellido AS trabajador
+            FROM Tareas t
+            JOIN Estados_Tareas et ON t.ID_estado_tarea = et.ID_estado_tarea
+            JOIN Categorias c ON t.ID_categoria = c.ID_categoria
+            JOIN Usuarios uc ON t.ID_creador = uc.ID_usuario
+            LEFT JOIN Usuarios ut ON t.ID_trabajador = ut.ID_usuario
+            LEFT JOIN Reseñas r ON t.ID_tarea = r.ID_tarea
+        ''').fetchall()
+    
+    def get_title(self):
+        return "Reporte de Tareas"
+    
+    def create_content(self, tareas):
+        for tarea in tareas:
+            # Título de la tarea
+            self.elements.append(Paragraph(f"Tarea ID: {tarea['ID_tarea']} - {tarea['Titulo']}", self.title_style))
+            
+            # Tabla con detalles de la tarea
+            details_data = [
+                [Paragraph("<b>Estado:</b>", self.label_style), Paragraph(tarea['estado_tarea'], self.value_style)],
+                [Paragraph("<b>Categoría:</b>", self.label_style), Paragraph(tarea['categoria'], self.value_style)],
+                [Paragraph("<b>Fecha de Creación:</b>", self.label_style), Paragraph(str(tarea['Fecha_creacion']), self.value_style)],
+                [Paragraph("<b>Fecha Límite:</b>", self.label_style), Paragraph(str(tarea['Fecha_limite']), self.value_style)],
+                [Paragraph("<b>Fecha de Finalización:</b>", self.label_style), Paragraph(str(tarea['Fecha_finalizacion']), self.value_style)],
+                [Paragraph("<b>Valor:</b>", self.label_style), Paragraph(f"{tarea['Valor']:.2f}", self.value_style)],
+                [Paragraph("<b>Calificación:</b>", self.label_style), Paragraph(str(tarea['Calificacion']), self.value_style)],
+                [Paragraph("<b>Creador:</b>", self.label_style), Paragraph(tarea['creador'], self.value_style)],
+                [Paragraph("<b>Trabajador:</b>", self.label_style), Paragraph(tarea['trabajador'] if tarea['trabajador'] else 'No asignado', self.value_style)],
+            ]
+            
+            details_table = Table(details_data, colWidths=[100, 300])
+            details_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e0f7fa')),
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#007bff')),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ]))
+            self.elements.append(details_table)
+            self.elements.append(Spacer(1, 8))
+            
+            # Descripción de la tarea
+            self.elements.append(Paragraph("<b>Descripción:</b>", self.label_style))
+            self.elements.append(Paragraph(tarea['Descripcion'], self.value_style))
+            self.elements.append(Spacer(1, 12))
+            self.elements.append(Paragraph("<br/>", self.styles['Normal']))
+            self.elements.append(Spacer(1, 24))
+
+# Factory Method
+class ReportFactory:
+    @staticmethod
+    def create_report(report_type):
+        if report_type == 'usuarios':
+            return UserReportGenerator()
+        elif report_type == 'tareas':
+            return TaskReportGenerator()
+        else:
+            raise ValueError(f"Tipo de reporte no soportado: {report_type}")
+    
+    @staticmethod
+    def generate_report(report_type, conn):
+        """Método de conveniencia para crear y generar reporte en un solo paso"""
+        report_generator = ReportFactory.create_report(report_type)
+        return report_generator.generate_report(conn)
+
+from abc import ABC, abstractmethod
+
+# Interfaz Observer
+class Observer(ABC):
+    @abstractmethod
+    def update(self, tarea_id, titulo, valor):
+        pass
+
+# Interfaz Subject
+class Subject(ABC):
+    @abstractmethod
+    def attach(self, observer):
+        pass
+    
+    @abstractmethod
+    def detach(self, observer):
+        pass
+    
+    @abstractmethod
+    def notify(self, tarea_id, titulo, valor):
+        pass
+
+# Observer concreto para notificaciones de usuarios
+class UserNotificationObserver(Observer):
+    def __init__(self, usuario_id):
+        self.usuario_id = usuario_id
+    
+    def update(self, tarea_id, titulo, valor):
+        """Almacenar datos para inserción posterior"""
+        self.tarea_id = tarea_id
+        self.titulo = titulo
+        self.valor = valor
+        print(f"Observer preparado para usuario {self.usuario_id} - tarea '{titulo}' con valor ${valor}")
+
+# Subject concreto - Notificador de tareas
+class TaskNotificationSubject(Subject):
+    def __init__(self):
+        self._observers = []
+    
+    def attach(self, observer):
+        """Agregar un observer a la lista"""
+        if observer not in self._observers:
+            self._observers.append(observer)
+    
+    def detach(self, observer):
+        """Remover un observer de la lista"""
+        if observer in self._observers:
+            self._observers.remove(observer)
+    
+    def notify(self, tarea_id, titulo, valor):
+        """Notificar a todos los observers registrados"""
+        print(f"Notificando nueva tarea: {titulo}")
+        for observer in self._observers:
+            observer.update(tarea_id, titulo, valor)
+    
+    def notify_and_save(self, tarea_id, titulo, valor, conn):
+        """Notificar y guardar todas las notificaciones usando una sola conexión"""
+        print(f"Notificando nueva tarea: {titulo}")
+        
+        # Notificar a todos los observers
+        for observer in self._observers:
+            observer.update(tarea_id, titulo, valor)
+        
+        # Insertar todas las notificaciones usando la conexión existente
+        for observer in self._observers:
+            conn.execute(
+                'INSERT INTO Notificaciones (usuario_id, tarea_id) VALUES (?, ?)', 
+                (observer.usuario_id, tarea_id)
+            )
+    
+    def load_active_users_as_observers(self, exclude_user_id, conn):
+        """Cargar todos los usuarios activos como observers (excepto el creador)"""
+        self._observers.clear()  # Limpiar observers anteriores
+        
+        # Obtener usuarios activos excluyendo al creador de la tarea
+        usuarios = conn.execute(
+            'SELECT ID_usuario FROM Usuarios WHERE ID_usuario != ? AND ID_estado_usuario = 1', 
+            (exclude_user_id,)
+        ).fetchall()
+        
+        # Crear observers para cada usuario activo
+        for usuario in usuarios:
+            user_observer = UserNotificationObserver(usuario['ID_usuario'])
+            self.attach(user_observer)
+        
+        print(f"Cargados {len(self._observers)} usuarios como observers")
+
+# Instancia global del notificador (singleton-like)
+task_notifier = None
+
+def get_task_notifier():
+    """Obtener la instancia del notificador de tareas"""
+    global task_notifier
+    if task_notifier is None:
+        task_notifier = TaskNotificationSubject()
+    return task_notifier
+
+class TaskFilterStrategy(ABC):
+    @abstractmethod
+    def apply_filter(self, conditions, params, filter_value):
+        """Aplica el filtro específico a las condiciones y parámetros"""
+        pass
+
+# Interfaz para estrategias de ordenamiento
+class TaskSortStrategy(ABC):
+    @abstractmethod
+    def get_order_clause(self, sort_order):
+        """Retorna la cláusula ORDER BY específica"""
+        pass
+
+# Estrategias concretas de filtrado
+class CategoryFilterStrategy(TaskFilterStrategy):
+    def apply_filter(self, conditions, params, filter_value):
+        if filter_value:
+            conditions.append('T.ID_categoria = ?')
+            params.append(filter_value)
+
+class StatusFilterStrategy(TaskFilterStrategy):
+    def apply_filter(self, conditions, params, filter_value):
+        if filter_value:
+            conditions.append('T.ID_estado_tarea = ?')
+            params.append(filter_value)
+
+# Estrategias concretas de ordenamiento
+class TitleSortStrategy(TaskSortStrategy):
+    def get_order_clause(self, sort_order):
+        return f'ORDER BY T.Titulo {sort_order}'
+
+class DateSortStrategy(TaskSortStrategy):
+    def get_order_clause(self, sort_order):
+        return f'ORDER BY T.Fecha_creacion {sort_order}'
+
+class ValueSortStrategy(TaskSortStrategy):
+    def get_order_clause(self, sort_order):
+        return f'ORDER BY T.Valor {sort_order}'
+
+# Contexto que utiliza las estrategias
+class TaskQueryBuilder:
+    def __init__(self):
+        self.base_query = '''
+            SELECT T.*, 
+                   C.Nombre AS Categoria, 
+                   ET.Descripcion AS Estado, 
+                   U1.Nombre AS CreadorNombre, 
+                   U1.Apellido AS CreadorApellido, 
+                   U2.Nombre AS TrabajadorNombre, 
+                   U2.Apellido AS TrabajadorApellido,
+                   R.Calificacion
+            FROM Tareas T
+            JOIN Categorias C ON T.ID_categoria = C.ID_categoria
+            JOIN Estados_Tareas ET ON T.ID_estado_tarea = ET.ID_estado_tarea
+            LEFT JOIN Usuarios U1 ON T.ID_creador = U1.ID_usuario
+            LEFT JOIN Usuarios U2 ON T.ID_trabajador = U2.ID_usuario
+            LEFT JOIN Reseñas R ON T.ID_tarea = R.ID_tarea
+        '''
+        
+        # Diccionario de estrategias de filtrado disponibles
+        self.filter_strategies = {
+            'category': CategoryFilterStrategy(),
+            'status': StatusFilterStrategy()
+        }
+        
+        # Diccionario de estrategias de ordenamiento disponibles
+        self.sort_strategies = {
+            'titulo': TitleSortStrategy(),
+            'fecha': DateSortStrategy(),
+            'valor': ValueSortStrategy()
+        }
+    
+    def build_query(self, filters, sort_by='titulo', sort_order='asc'):
+        """
+        Construye la consulta SQL usando las estrategias
+        
+        Args:
+            filters: dict con los filtros {'category': valor, 'status': valor}
+            sort_by: str con el criterio de ordenamiento
+            sort_order: str con el orden (asc/desc)
+        """
+        conditions = []
+        params = []
+        
+        # Aplicar estrategias de filtrado
+        for filter_name, filter_value in filters.items():
+            if filter_name in self.filter_strategies:
+                strategy = self.filter_strategies[filter_name]
+                strategy.apply_filter(conditions, params, filter_value)
+        
+        # Construir query con condiciones
+        query = self.base_query
+        if conditions:
+            query += ' WHERE ' + ' AND '.join(conditions)
+        
+        # Aplicar estrategia de ordenamiento
+        if sort_by in self.sort_strategies:
+            sort_strategy = self.sort_strategies[sort_by]
+            query += f' {sort_strategy.get_order_clause(sort_order)}'
+        else:
+            # Fallback al ordenamiento por defecto
+            query += f' ORDER BY T.Titulo {sort_order}'
+        
+        return query, params
+
+# Instancia global del query builder
+task_query_builder = TaskQueryBuilder()
+
+class DataProcessor(ABC):
+    @abstractmethod
+    def process(self, data):
+        pass
+
+# Componente concreto básico
+class BaseDataProcessor(DataProcessor):
+    def process(self, data):
+        return data
+
+# Decorator base
+class DataProcessorDecorator(DataProcessor):
+    def __init__(self, processor):
+        self._processor = processor
+    
+    def process(self, data):
+        return self._processor.process(data)
+
+# Decoradores concretos para validación
+class EmailValidatorDecorator(DataProcessorDecorator):
+    def process(self, data):
+        data = super().process(data)
+        if 'email' in data:
+            email = data['email']
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, email):
+                data['errors'] = data.get('errors', [])
+                data['errors'].append('El formato del correo electrónico no es válido')
+        return data
+
+class PhoneValidatorDecorator(DataProcessorDecorator):
+    def process(self, data):
+        data = super().process(data)
+        if 'phone' in data:
+            phone = data['phone']
+            # Validar que solo contenga números, espacios, guiones y paréntesis
+            phone_pattern = r'^[\d\s\-\(\)]+$'
+            if not re.match(phone_pattern, phone) or len(phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')) < 7:
+                data['errors'] = data.get('errors', [])
+                data['errors'].append('El número de teléfono no es válido')
+        return data
+
+class RequiredFieldsDecorator(DataProcessorDecorator):
+    def __init__(self, processor, required_fields):
+        super().__init__(processor)
+        self.required_fields = required_fields
+    
+    def process(self, data):
+        data = super().process(data)
+        for field in self.required_fields:
+            if field not in data or not data[field] or str(data[field]).strip() == '':
+                data['errors'] = data.get('errors', [])
+                data['errors'].append(f'El campo {field} es requerido')
+        return data
+
+class IdentificationValidatorDecorator(DataProcessorDecorator):
+    def process(self, data):
+        data = super().process(data)
+        if 'identification' in data:
+            identification = str(data['identification']).strip()
+            # Validar que tenga entre 6 y 15 dígitos
+            if not identification.isdigit() or len(identification) < 6 or len(identification) > 15:
+                data['errors'] = data.get('errors', [])
+                data['errors'].append('La identificación debe contener entre 6 y 15 dígitos')
+        return data
+
+# Decoradores para formateo/transformación
+class DataFormatterDecorator(DataProcessorDecorator):
+    def process(self, data):
+        data = super().process(data)
+        # Formatear strings: trim y capitalizar nombres
+        if 'name' in data:
+            data['name'] = data['name'].strip().title()
+        if 'apellido' in data:
+            data['apellido'] = data['apellido'].strip().title()
+        if 'email' in data:
+            data['email'] = data['email'].strip().lower()
+        if 'phone' in data:
+            # Limpiar teléfono de caracteres especiales para almacenamiento
+            phone_clean = re.sub(r'[\s\-\(\)]', '', data['phone'])
+            data['phone_formatted'] = phone_clean
+        return data
+
+# Factory para crear procesadores decorados
+class UserDataProcessorFactory:
+    @staticmethod
+    def create_registration_processor():
+        """Crear procesador para registro de usuario"""
+        processor = BaseDataProcessor()
+        
+        # Aplicar decoradores en orden
+        required_fields = ['name', 'apellido', 'identification', 'email', 'address', 'phone', 'city', 'password']
+        processor = RequiredFieldsDecorator(processor, required_fields)
+        processor = EmailValidatorDecorator(processor)
+        processor = PhoneValidatorDecorator(processor)
+        processor = IdentificationValidatorDecorator(processor)
+        processor = DataFormatterDecorator(processor)
+        
+        return processor
+    
+    @staticmethod
+    def create_profile_update_processor():
+        """Crear procesador para actualización de perfil"""
+        processor = BaseDataProcessor()
+        
+        required_fields = ['nombre', 'apellido', 'correo', 'identificacion', 'direccion', 'telefono', 'ciudad']
+        processor = RequiredFieldsDecorator(processor, required_fields)
+        processor = EmailValidatorDecorator(processor)
+        processor = PhoneValidatorDecorator(processor)
+        processor = IdentificationValidatorDecorator(processor)
+        processor = DataFormatterDecorator(processor)
+        
+        return processor
 
 # ======================================================= #
 #                   LOGIN REQUERIDO                       #
@@ -104,7 +620,7 @@ def verificar_usuario_activo(f):
             return redirect(url_for('login'))
 
         # Llamamos a la función para verificar si el usuario está activo
-        conn = get_db_connection()
+        conn = db_manager.get_connection()
         estado_usuario = conn.execute(
             'SELECT ID_estado_usuario FROM Usuarios WHERE ID_usuario = ?', 
             (usuario_id,)
@@ -127,8 +643,8 @@ def verificar_usuario_activo(f):
 @login_requerido
 @verificar_usuario_activo
 def toggle_usuario(id_usuario):
-    conn = get_db_connection()
-    
+    conn = db_manager.get_connection()
+
     # Verificar el tipo de usuario y el estado actual
     usuario = conn.execute(
         'SELECT ID_tipo_usuario, ID_estado_usuario FROM Usuarios WHERE ID_usuario = ?', (id_usuario,)
@@ -154,7 +670,7 @@ def toggle_usuario(id_usuario):
 @login_requerido
 @verificar_usuario_activo
 def admin():
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
 
     imagen_base64 = None
     if 'user_id' in session:
@@ -197,92 +713,17 @@ def admin():
 @login_requerido
 @verificar_usuario_activo
 def reporte_usuarios():
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     
-    # Consulta SQL que une las tablas Usuarios, Estados_Usuarios, Tipos_Usuarios y Ciudades
-    usuarios = conn.execute('''
-        SELECT u.ID_usuario, u.Nombre, u.Apellido, u.Correo, tu.Nombre AS tipo_usuario,
-               eu.Nombre AS estado_usuario, c.Nombre AS ciudad, u.Fecha_creacion
-        FROM Usuarios u
-        JOIN Estados_Usuarios eu ON u.ID_estado_usuario = eu.ID_estado_usuario
-        JOIN Tipos_Usuarios tu ON u.ID_tipo_usuario = tu.ID_tipo_usuario
-        JOIN Ciudades c ON u.ID_ciudad = c.ID_ciudad
-    ''').fetchall()
-
-    # Crear un buffer para el PDF
-    buffer = io.BytesIO()
-    pdf = SimpleDocTemplate(buffer, pagesize=letter)
+    # Genera el reporte usando Factory Method
+    buffer = ReportFactory.generate_report('usuarios', conn)
     
-    # Crear una lista para almacenar los elementos del PDF
-    elements = []
-    styles = getSampleStyleSheet()
-
-    # Título del reporte
-    title = Paragraph("Reporte de Usuarios", styles['Title'])
-    elements.append(title)
-    elements.append(Spacer(1, 12))
-
-    # Estilos personalizados
-    title_style = ParagraphStyle(
-        'title_style',
-        parent=styles['Heading2'],
-        textColor=colors.HexColor('#007bff'),
-        fontSize=12,
-        spaceAfter=8,
-        spaceBefore=8
-    )
-    label_style = ParagraphStyle(
-        'label_style',
-        parent=styles['Normal'],
-        textColor=colors.HexColor('#007bff'),
-        fontSize=10,
-        spaceAfter=2,
-        spaceBefore=2
-    )
-    value_style = styles['Normal']
-
-    # Crear una tarjeta para cada usuario
-    for usuario in usuarios:
-        # Título de la tarjeta de usuario
-        elements.append(Paragraph(f"Usuario ID: {usuario['ID_usuario']} - {usuario['Nombre']} {usuario['Apellido']}", title_style))
-        
-        # Tabla con detalles del usuario
-        details_data = [
-            [Paragraph("<b>Correo:</b>", label_style), Paragraph(usuario['Correo'], value_style)],
-            [Paragraph("<b>Tipo de Usuario:</b>", label_style), Paragraph(usuario['tipo_usuario'], value_style)],
-            [Paragraph("<b>Estado:</b>", label_style), Paragraph(usuario['estado_usuario'], value_style)],
-            [Paragraph("<b>Ciudad:</b>", label_style), Paragraph(usuario['ciudad'], value_style)],
-            [Paragraph("<b>Fecha de Creación:</b>", label_style), Paragraph(str(usuario['Fecha_creacion']), value_style)],
-        ]
-
-        # Crear la tabla de detalles con estilo
-        details_table = Table(details_data, colWidths=[120, 250])
-        details_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e0f7fa')),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#007bff')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-        ]))
-        elements.append(details_table)
-        
-        # Separador entre usuarios
-        elements.append(Spacer(1, 12))
-        elements.append(Paragraph("<br/>", styles['Normal']))
-        elements.append(Spacer(1, 24))
-
-    # Generar el PDF
-    pdf.build(elements)
-
-    # Regresar al cliente como un archivo PDF
-    buffer.seek(0)
+    conn.close()
+    
+    # Retornar respuesta
     response = make_response(buffer.read())
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = 'attachment; filename=Reporte de usuarios.pdf'
-    
     return response
 
 
@@ -293,107 +734,17 @@ def reporte_usuarios():
 @login_requerido
 @verificar_usuario_activo
 def reporte_tareas():
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     
-    # Consulta SQL que une las tablas Tareas, Estados_Tareas, Categorias y Usuarios
-    tareas = conn.execute('''
-        SELECT t.ID_tarea, t.Titulo, t.Descripcion, t.Fecha_creacion, t.Fecha_limite, 
-            t.Fecha_finalizacion, t.Valor, r.Calificacion, et.Descripcion AS estado_tarea, 
-            c.Nombre AS categoria, uc.Nombre || ' ' || uc.Apellido AS creador, 
-            ut.Nombre || ' ' || ut.Apellido AS trabajador
-        FROM Tareas t
-        JOIN Estados_Tareas et ON t.ID_estado_tarea = et.ID_estado_tarea
-        JOIN Categorias c ON t.ID_categoria = c.ID_categoria
-        JOIN Usuarios uc ON t.ID_creador = uc.ID_usuario
-        LEFT JOIN Usuarios ut ON t.ID_trabajador = ut.ID_usuario
-        LEFT JOIN Reseñas r ON t.ID_tarea = r.ID_tarea  -- Añadimos LEFT JOIN para obtener calificaciones
-    ''').fetchall()
-
-    # Crear un buffer para el PDF
-    buffer = io.BytesIO()
-    pdf = SimpleDocTemplate(buffer, pagesize=letter)
+    # Genera el reporte usando Factory Method
+    buffer = ReportFactory.generate_report('tareas', conn)
     
-    # Crear una lista para almacenar los elementos del PDF
-    elements = []
-    styles = getSampleStyleSheet()
-
-    # Título del reporte
-    title = Paragraph("Reporte de Tareas", styles['Title'])
-    elements.append(title)
-    elements.append(Spacer(1, 12))
-
-    # Estilos personalizados
-    title_style = ParagraphStyle(
-        'title_style',
-        parent=styles['Heading2'],
-        textColor=colors.HexColor('#007bff'),
-        fontSize=12,
-        spaceAfter=8,
-        spaceBefore=8
-    )
-    label_style = ParagraphStyle(
-        'label_style',
-        parent=styles['Normal'],
-        textColor=colors.HexColor('#007bff'),
-        fontSize=10,
-        spaceAfter=2,
-        spaceBefore=2
-    )
-    value_style = styles['Normal']
-
-    # Crear una tarjeta para cada tarea
-    for tarea in tareas:
-        # Título de la tarea
-        elements.append(Paragraph(f"Tarea ID: {tarea['ID_tarea']} - {tarea['Titulo']}", title_style))
-        
-        # Tabla con detalles de la tarea
-        details_data = [
-            [Paragraph("<b>Estado:</b>", label_style), Paragraph(tarea['estado_tarea'], value_style)],
-            [Paragraph("<b>Categoría:</b>", label_style), Paragraph(tarea['categoria'], value_style)],
-            [Paragraph("<b>Fecha de Creación:</b>", label_style), Paragraph(str(tarea['Fecha_creacion']), value_style)],
-            [Paragraph("<b>Fecha Límite:</b>", label_style), Paragraph(str(tarea['Fecha_limite']), value_style)],
-            [Paragraph("<b>Fecha de Finalización:</b>", label_style), Paragraph(str(tarea['Fecha_finalizacion']), value_style)],
-            [Paragraph("<b>Valor:</b>", label_style), Paragraph(f"{tarea['Valor']:.2f}", value_style)],
-            [Paragraph("<b>Calificación:</b>", label_style), Paragraph(str(tarea['Calificacion']), value_style)],
-            [Paragraph("<b>Creador:</b>", label_style), Paragraph(tarea['creador'], value_style)],
-            [Paragraph("<b>Trabajador:</b>", label_style), Paragraph(tarea['trabajador'] if tarea['trabajador'] else 'No asignado', value_style)],
-        ]
-
-        # Crear la tabla de detalles con estilo
-        details_table = Table(details_data, colWidths=[100, 300])
-        details_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e0f7fa')),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#007bff')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-        ]))
-        elements.append(details_table)
-        
-        # Espacio antes de la descripción
-        elements.append(Spacer(1, 8))
-
-        # Descripción de la tarea
-        elements.append(Paragraph("<b>Descripción:</b>", label_style))
-        elements.append(Paragraph(tarea['Descripcion'], value_style))
-
-        # Separador entre tareas
-        elements.append(Spacer(1, 12))
-        elements.append(Paragraph("<br/>", styles['Normal']))
-        elements.append(Spacer(1, 24))
-
-    # Generar el PDF
-    pdf.build(elements)
-
-    # Regresar al cliente como un archivo PDF
-    buffer.seek(0)
+    conn.close()
+    
+    # Retornar respuesta
     response = make_response(buffer.read())
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = 'attachment; filename=Reporte de tareas.pdf'
-    
     return response
 
 # ======================================================= #
@@ -401,7 +752,7 @@ def reporte_tareas():
 # ======================================================= #
 @app.route('/')
 def index():
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     order_by = request.args.get('order_by', 'Fecha_creacion')
     sort_order = request.args.get('sort_order', 'asc')
     
@@ -435,7 +786,7 @@ def calificar_tarea(tarea_id):
     calificacion = request.form['calificacion']
     contenido_reseña = request.form.get('contenido', '')  # Texto opcional de la reseña
     usuario_actual = session['user_id']
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
 
     # Verificar si el usuario es el creador de la tarea y si ya está calificada en la tabla de Reseñas
     tarea = conn.execute('SELECT ID_creador FROM Tareas WHERE ID_tarea = ?', (tarea_id,)).fetchone()
@@ -463,10 +814,6 @@ def calificar_tarea(tarea_id):
 
     return jsonify({'success': True, 'message': 'Calificación registrada exitosamente.'})
 
-
-
-
-
 # ======================================================= #
 #                      LISTA DE TAREAS                    #
 # ======================================================= #
@@ -474,49 +821,28 @@ def calificar_tarea(tarea_id):
 @login_requerido
 @verificar_usuario_activo
 def tareas():
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     
+    # Obtener parámetros de filtrado (mantenemos los mismos nombres)
     categoria_filtro = int(request.args.get('categoria', '')) if request.args.get('categoria', '').isdigit() else ''
     estado_filtro = int(request.args.get('estado', '')) if request.args.get('estado', '').isdigit() else ''
     orden = request.args.get('orden', 'asc')
+    sort_by = request.args.get('sort_by', 'titulo')  # Nuevo parámetro opcional
     
+    # Validar orden
     if orden not in ['asc', 'desc']:
         orden = 'asc'
-
-    # Consulta con JOIN para obtener las tareas y sus detalles relacionados
-    query = '''
-        SELECT T.*, 
-               C.Nombre AS Categoria, 
-               ET.Descripcion AS Estado, 
-               U1.Nombre AS CreadorNombre, 
-               U1.Apellido AS CreadorApellido, 
-               U2.Nombre AS TrabajadorNombre, 
-               U2.Apellido AS TrabajadorApellido,
-               R.Calificacion  -- Cambiamos de T.Calificacion a R.Calificacion
-        FROM Tareas T
-        JOIN Categorias C ON T.ID_categoria = C.ID_categoria
-        JOIN Estados_Tareas ET ON T.ID_estado_tarea = ET.ID_estado_tarea
-        LEFT JOIN Usuarios U1 ON T.ID_creador = U1.ID_usuario
-        LEFT JOIN Usuarios U2 ON T.ID_trabajador = U2.ID_usuario
-        LEFT JOIN Reseñas R ON T.ID_tarea = R.ID_tarea  -- Añadimos un LEFT JOIN para las reseñas
-    '''
     
-    conditions = []
-    params = []
-
-    if categoria_filtro:
-        conditions.append('T.ID_categoria = ?')
-        params.append(categoria_filtro)
-
-    if estado_filtro:
-        conditions.append('T.ID_estado_tarea = ?')
-        params.append(estado_filtro)
-
-    if conditions:
-        query += ' WHERE ' + ' AND '.join(conditions)
-
-    query += f' ORDER BY T.Titulo {orden}'
-
+    # Preparar filtros para las estrategias
+    filters = {
+        'category': categoria_filtro,
+        'status': estado_filtro
+    }
+    
+    # Usar el patrón Strategy para construir la consulta
+    query, params = task_query_builder.build_query(filters, sort_by, orden)
+    
+    # Ejecutar la consulta
     tareas = conn.execute(query, params).fetchall()
 
     # Obtener el usuario actual
@@ -540,9 +866,6 @@ def tareas():
                            categoria_filtro=categoria_filtro, estado_filtro=estado_filtro, 
                            orden=orden)
 
-
-
-
 # ======================================================= #
 #                      POSTULAR A TAREA                   #
 # ======================================================= #
@@ -551,7 +874,7 @@ def tareas():
 @verificar_usuario_activo
 def postular(tarea_id):
     usuario_actual = session['user_id']
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     
     # Obtener la tarea específica
     tarea = conn.execute('SELECT ID_estado_tarea, ID_trabajador FROM Tareas WHERE ID_tarea = ?', (tarea_id,)).fetchone()
@@ -589,7 +912,7 @@ def postular(tarea_id):
 @verificar_usuario_activo
 def finalizar_tarea(tarea_id):
     usuario_actual = session['user_id']
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     
     # Obtener la tarea específica
     tarea = conn.execute('SELECT ID_trabajador, ID_estado_tarea FROM Tareas WHERE ID_tarea = ?', (tarea_id,)).fetchone()
@@ -622,7 +945,7 @@ def finalizar_tarea(tarea_id):
 @login_requerido
 @verificar_usuario_activo
 def detalles_tarea(tarea_id):
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     tarea = conn.execute('SELECT * FROM Tareas WHERE ID_tarea = ?', (tarea_id,)).fetchone()
     usuario_actual = session['user_id']  # Obtén el ID del usuario actual
 
@@ -667,7 +990,7 @@ def detalles_tarea(tarea_id):
 @login_requerido
 @verificar_usuario_activo
 def agregar_solicitud():
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     categorias = conn.execute('SELECT ID_categoria, Nombre FROM Categorias').fetchall()
     
     usuarios = conn.execute('SELECT * FROM Usuarios WHERE ID_usuario = ?', (session['user_id'],)).fetchone()
@@ -696,7 +1019,7 @@ def agregar_solicitud():
         
         estado = 1
         
-        conn = get_db_connection()
+        conn = db_manager.get_connection()
         
         # Insertar la nueva tarea en la tabla Tareas
         conn.execute('''
@@ -707,12 +1030,12 @@ def agregar_solicitud():
         # Obtener el ID de la tarea recién creada
         tarea_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
         
-        # Obtener todos los trabajadores para enviarles una notificación
-        trabajadores = conn.execute('SELECT ID_usuario FROM Usuarios WHERE ID_usuario != ?', (session['user_id'],)).fetchall()
-
-        # Insertar notificaciones para cada trabajador
-        for trabajador in trabajadores:
-            conn.execute('INSERT INTO Notificaciones (usuario_id, tarea_id) VALUES (?, ?)', (trabajador['ID_usuario'], tarea_id))
+        # Obtener el notificador y configurar observers
+        notifier = get_task_notifier()
+        notifier.load_active_users_as_observers(session['user_id'], conn)
+        
+        # Notificar y guardar usando la misma conexión
+        notifier.notify_and_save(tarea_id, titulo, valor, conn)
         
         conn.commit()
         conn.close()
@@ -729,7 +1052,7 @@ def agregar_solicitud():
 def notificaciones():
     try:
         usuario_actual = session['user_id']
-        conn = get_db_connection()
+        conn = db_manager.get_connection()
 
         # Obtener las notificaciones no notificadas junto con el título y el valor de la tarea
         notificaciones = conn.execute('''
@@ -770,10 +1093,10 @@ def notificaciones():
 @login_requerido
 @verificar_usuario_activo
 def editar_perfil():
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     ciudades = conn.execute('SELECT ID_ciudad, Nombre FROM Ciudades').fetchall()
     conn.close()
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     usuario = conn.execute('''
         SELECT U.*, C.Nombre AS Ciudad
         FROM Usuarios U
@@ -788,18 +1111,36 @@ def editar_perfil():
 @login_requerido
 @verificar_usuario_activo
 def actualizar_perfil():
-    nombre = request.form.get('nombre')
-    apellido = request.form.get('apellido')
-    correo = request.form.get('correo')
-    identificacion = request.form.get('identificacion')
-    direccion = request.form.get('direccion')
-    telefono = request.form.get('telefono')
-    ciudad = request.form.get('ciudad')
-
-    if not all([nombre, apellido, correo, identificacion, direccion, telefono, ciudad]):
-        print('Por favor, completa todos los campos')
-        return redirect(url_for('editar_perfil'))  
-    conn = get_db_connection()
+    # Preparar datos para el procesador
+    profile_data = {
+        'nombre': request.form.get('nombre', ''),
+        'apellido': request.form.get('apellido', ''),
+        'correo': request.form.get('correo', ''),
+        'identificacion': request.form.get('identificacion', ''),
+        'direccion': request.form.get('direccion', ''),
+        'telefono': request.form.get('telefono', ''),
+        'ciudad': request.form.get('ciudad', '')
+    }
+    
+    # Crear procesador y validar datos
+    processor = UserDataProcessorFactory.create_profile_update_processor()
+    processed_data = processor.process(profile_data)
+    
+    # Verificar errores de validación
+    if 'errors' in processed_data:
+        flash('; '.join(processed_data['errors']), 'danger')
+        return redirect(url_for('editar_perfil'))
+    
+    # Usar datos procesados
+    nombre = processed_data['nombre']
+    apellido = processed_data['apellido']
+    correo = processed_data['correo']
+    identificacion = processed_data['identificacion']
+    direccion = processed_data['direccion']
+    telefono = processed_data.get('telefono_formatted', processed_data['telefono'])
+    ciudad = processed_data['ciudad']
+    
+    conn = db_manager.get_connection()
     try:
         conn.execute('''
             UPDATE Usuarios
@@ -808,10 +1149,10 @@ def actualizar_perfil():
         ''', (nombre, apellido, correo, identificacion, direccion, telefono, ciudad, session['user_id']))
         
         conn.commit()
-        print('Perfil actualizado correctamente')
+        flash('Perfil actualizado correctamente', 'success')
     except Exception as e:
         conn.rollback()
-        print(f'Error al actualizar el perfil: {str(e)}')
+        flash(f'Error al actualizar el perfil: {str(e)}', 'danger')
     finally:
         conn.close()
 
@@ -836,7 +1177,7 @@ def cambiarFoto():
     
     foto_blob = nueva_foto.read()
 
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     conn.execute('''
         UPDATE Usuarios
         SET FotoPerfil = ?
@@ -855,7 +1196,7 @@ def cambiarFoto():
 @app.route('/profile', methods=['GET'])
 @login_requerido
 def profile():
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     usuarios = conn.execute('''
         SELECT U.*, T.Nombre AS Tipo_Usuario, E.Nombre AS Estado_Usuario, C.Nombre AS Ciudad
         FROM Usuarios U
@@ -920,34 +1261,54 @@ def profile():
 # ======================================================= #
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    conn = get_db_connection()
+    conn = db_manager.get_connection()
     ciudades = conn.execute('SELECT ID_ciudad, Nombre FROM Ciudades').fetchall()
     conn.close()
 
     if request.method == 'POST':
-        nombre = request.form['name']
-        apellido = request.form['apellido']
-        identificacion = request.form['identification']
-        email = request.form['email']
-        direccion = request.form['address']
-        telefono = request.form['phone']
-        ciudad = request.form['city']
-        password = request.form['password']
+        # Preparar datos para el procesador
+        user_data = {
+            'name': request.form.get('name', ''),
+            'apellido': request.form.get('apellido', ''),
+            'identification': request.form.get('identification', ''),
+            'email': request.form.get('email', ''),
+            'address': request.form.get('address', ''),
+            'phone': request.form.get('phone', ''),
+            'city': request.form.get('city', ''),
+            'password': request.form.get('password', '')
+        }
+        
+        # Crear procesador usando Factory y aplicar decoradores
+        processor = UserDataProcessorFactory.create_registration_processor()
+        processed_data = processor.process(user_data)
+        
+        # Verificar si hay errores de validación
+        if 'errors' in processed_data:
+            return jsonify({'error': '; '.join(processed_data['errors'])}), 400
+        
+        # Usar datos procesados y formateados
+        nombre = processed_data['name']
+        apellido = processed_data['apellido']
+        identificacion = processed_data['identification']
+        email = processed_data['email']
+        direccion = processed_data['address']
+        telefono = processed_data.get('phone_formatted', processed_data['phone'])
+        ciudad = processed_data['city']
+        password = processed_data['password']
+        
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
         # Manejar la carga de archivos
         id_file = request.files['id_file']
         profile_file = request.files['profile_file']
 
-        # Asegúrate de que los archivos no estén vacíos
         if not id_file or not profile_file:
             return jsonify({'error': 'Se debe subir ambos archivos.'}), 400
 
-        # Leer el contenido de los archivos
         id_file_data = id_file.read()
         profile_file_data = profile_file.read()
 
-        conn = get_db_connection()
+        conn = db_manager.get_connection()
         try:
             # Verificar si la cédula ya existe
             existing_user = conn.execute('SELECT Identificacion FROM Usuarios WHERE Identificacion = ?', 
@@ -988,7 +1349,7 @@ def login():
         email = request.form['correo']
         password = request.form['contrasena']
 
-        conn = get_db_connection()
+        conn = db_manager.get_connection()
         usuario = conn.execute('SELECT * FROM Usuarios WHERE Correo = ?', (email,)).fetchone()
         conn.close()
 
